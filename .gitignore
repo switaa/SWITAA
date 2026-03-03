@@ -23,3 +23,8 @@ Desktop.ini
 dist/
 build/
 *.log
+
+# Marcus data
+marcus/data/
+__pycache__/
+*.pyc
