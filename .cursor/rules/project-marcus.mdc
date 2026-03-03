@@ -1,0 +1,33 @@
+---
+description: Contexte général du projet Marcus et conventions
+alwaysApply: true
+---
+
+# Marcus - Outil de recherche de produits Marketplace
+
+## Contexte
+
+Marcus est un outil de recherche et d'analyse de produits à vendre sur différentes plateformes marketplace. L'objectif est d'identifier des opportunités de vente rentables.
+
+## Langue
+
+- Toujours répondre en **français**
+- Les commentaires de code peuvent rester en anglais
+- Les messages de commit en anglais
+
+## Conventions
+
+- Nommer le projet et l'outil "Marcus" dans toute la communication
+- Privilégier la clarté et la maintenabilité du code
+- Documenter les décisions d'architecture importantes
+
+## Infrastructure
+
+- Hébergement serveurs : **Hetzner Cloud**
+- Les clés API et secrets sont stockés dans `.env` (jamais commités)
+
+## Sécurité
+
+- Ne JAMAIS commiter de secrets, tokens ou clés API
+- Utiliser le fichier `.env` pour toute donnée sensible
+- Vérifier les fichiers avant chaque commit

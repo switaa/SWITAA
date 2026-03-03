@@ -1,0 +1,30 @@
+---
+description: Standards de code et conventions de nommage
+alwaysApply: true
+---
+
+# Standards de code
+
+## Nommage
+
+- Variables et fonctions : `camelCase`
+- Classes et types : `PascalCase`
+- Constantes : `UPPER_SNAKE_CASE`
+- Fichiers : `kebab-case`
+
+## Structure
+
+- Un fichier = une responsabilité
+- Séparer la logique métier de l'infrastructure
+- Garder les fonctions courtes (< 30 lignes idéalement)
+
+## Gestion d'erreurs
+
+- Toujours gérer les erreurs explicitement
+- Logger les erreurs avec contexte suffisant pour le debug
+- Ne jamais ignorer silencieusement une exception
+
+## Git
+
+- Commits atomiques (un changement logique par commit)
+- Messages de commit concis en anglais
