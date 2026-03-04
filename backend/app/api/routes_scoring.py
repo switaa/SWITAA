@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,7 +14,7 @@ router = APIRouter(prefix="/api/v1/scoring", tags=["scoring"])
 
 
 class OpportunityOut(BaseModel):
-    id: str
+    id: UUID
     asin: str
     title: str
     price: float
@@ -54,7 +56,7 @@ def list_opportunities(
     rows = q.order_by(Opportunity.score.desc()).limit(limit).all()
     return [
         OpportunityOut(
-            id=str(r.id), asin=r.asin, title=r.title, price=float(r.price),
+            id=r.id, asin=r.asin, title=r.title, price=float(r.price),
             cost_price=float(r.cost_price), margin_pct=float(r.margin_pct),
             score=float(r.score), decision=r.decision, marketplace=r.marketplace,
         )

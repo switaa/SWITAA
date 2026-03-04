@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -38,7 +40,7 @@ class RefreshRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: UUID
     email: str
     full_name: str
     role: str

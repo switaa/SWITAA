@@ -24,8 +24,8 @@ class ListingCreate(BaseModel):
 
 
 class ListingOut(BaseModel):
-    id: str
-    product_id: str
+    id: UUID
+    product_id: UUID
     marketplace: str
     title: str
     bullets: list | None

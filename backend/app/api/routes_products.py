@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/products", tags=["products"])
 
 
 class ProductOut(BaseModel):
-    id: str
+    id: UUID
     asin: str
     title: str
     brand: str

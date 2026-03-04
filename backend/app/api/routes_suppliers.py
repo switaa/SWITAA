@@ -27,7 +27,7 @@ class SupplierCreate(BaseModel):
 
 
 class SupplierOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     access_type: str
     host: str

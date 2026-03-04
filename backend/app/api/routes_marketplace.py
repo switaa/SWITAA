@@ -20,7 +20,7 @@ class AccountCreate(BaseModel):
 
 
 class AccountOut(BaseModel):
-    id: str
+    id: UUID
     platform: str
     seller_id: str
     is_active: bool
@@ -34,8 +34,8 @@ class PushRequest(BaseModel):
 
 
 class PushLogOut(BaseModel):
-    id: str
-    listing_id: str
+    id: UUID
+    listing_id: UUID
     status: str
     error_message: str
 
