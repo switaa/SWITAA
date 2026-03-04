@@ -20,6 +20,8 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs" if settings.is_debug else None,
     redoc_url="/redoc" if settings.is_debug else None,
+    redirect_slashes=False,
+    root_path="",
 )
 
 app.add_middleware(

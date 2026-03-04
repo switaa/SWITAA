@@ -80,8 +80,8 @@ export default function CampaignDetailPage() {
       const qs = params.toString() ? `?${params.toString()}` : "";
 
       const [c, r] = await Promise.all([
-        api.get<Campaign>(`/api/v1/campaigns/${id}/`),
-        api.get<ProductResult[]>(`/api/v1/campaigns/${id}/results/${qs}`),
+        api.get<Campaign>(`/api/v1/campaigns/${id}`),
+        api.get<ProductResult[]>(`/api/v1/campaigns/${id}/results${qs}`),
       ]);
       setCampaign(c);
       setResults(r);
