@@ -43,7 +43,7 @@ export default function ResearchPage() {
   const fetchCampaigns = useCallback(async () => {
     try {
       const params = statusFilter ? `?status=${statusFilter}` : "";
-      const data = await api.get<Campaign[]>(`/api/v1/campaigns${params}`);
+      const data = await api.get<Campaign[]>(`/api/v1/campaigns/${params}`);
       setCampaigns(data);
     } catch (e) {
       console.error(e);
@@ -62,7 +62,7 @@ export default function ResearchPage() {
     if (!confirm("Lancer les 8 sous-niches ? Cela va demarrer 8 campagnes de recherche en parallele.")) return;
     setLaunching(true);
     try {
-      await api.post("/api/v1/campaigns/quick-start");
+      await api.post("/api/v1/campaigns/quick-start/");
       await fetchCampaigns();
     } catch (e) {
       alert(`Erreur: ${e}`);
