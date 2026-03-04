@@ -337,7 +337,13 @@ async def run_campaign(campaign_id: str, user_id: str) -> None:
                     try:
                         pricing = await spapi.get_competitive_pricing(asin)
                         if pricing and asin in enriched_by_asin:
-                            pass
+                            from app.services.spapi_enrichment_service import _parse_competitive_pricing
+                            spapi_data = _parse_competitive_pricing(pricing)
+                            if spapi_data:
+                                enriched_by_asin[asin].setdefault("raw_data", {})
+                                enriched_by_asin[asin]["raw_data"]["spapi"] = spapi_data
+                                if "buybox_price" in spapi_data:
+                                    enriched_by_asin[asin]["buybox_price"] = spapi_data["buybox_price"]
                     except Exception:
                         logger.debug(f"SP-API error for {asin}, skipping")
                     await asyncio.sleep(1)
