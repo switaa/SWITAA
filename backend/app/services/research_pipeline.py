@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -246,7 +247,7 @@ def _upsert_product(db: Session, data: dict[str, Any], user_id: str, niche: str,
 async def run_campaign(campaign_id: str, user_id: str) -> None:
     """
     Run a search campaign through 4 phases:
-    - Phase 1 (helium10): Search by keyword, collect ASINs
+    - Phase 1 (amazon_search): Search Amazon by keyword, collect ASINs
     - Phase 2 (keepa): Enrich ASINs in batches of 100
     - Phase 3 (spapi): Get competitive pricing (optional if no SP-API credentials)
     - Phase 4 (scoring): Score products, save opportunities
@@ -260,45 +261,48 @@ async def run_campaign(campaign_id: str, user_id: str) -> None:
             logger.error(f"Campaign {campaign_id} not found")
             return
 
-        _update_campaign_status(db, campaign_uuid, "running", "helium10", 0)
+        _update_campaign_status(db, campaign_uuid, "running", "amazon_search", 0)
 
         keywords = campaign.keywords or []
         filters = campaign.filters or {}
-        filters.setdefault("marketplace", campaign.marketplace)
         marketplace = campaign.marketplace
         niche = campaign.niche or ""
         sub_niche = campaign.sub_niche or ""
 
-        # Phase 1: Helium10 - collect ASINs per keyword
+        # Phase 1: Amazon Search - collect ASINs per keyword
         asin_to_keyword: dict[str, str] = {}
         asin_to_rank: dict[str, int] = {}
         rank_counter = 0
 
-        from app.services.helium10_service import Helium10Service
+        from app.services.amazon_search_service import AmazonSearchService
 
-        h10 = Helium10Service()
+        searcher = AmazonSearchService()
         try:
             for i, keyword in enumerate(keywords):
-                pct = int(10 + (i / max(len(keywords), 1)) * 15)
-                _update_campaign_status(db, campaign_uuid, "running", "helium10", pct)
+                pct = int(5 + (i / max(len(keywords), 1)) * 20)
+                _update_campaign_status(db, campaign_uuid, "running", "amazon_search", pct)
 
-                products = await h10.search_by_keyword(keyword=keyword, filters=filters)
+                products = await searcher.search_by_keyword(
+                    keyword=keyword, filters=filters, marketplace=marketplace
+                )
                 for p in products:
                     asin = p.get("asin")
                     if asin and asin not in asin_to_keyword:
                         asin_to_keyword[asin] = keyword
                         rank_counter += 1
                         asin_to_rank[asin] = rank_counter
-            await h10.close()
+
+                await asyncio.sleep(random.uniform(3, 7))
+            await searcher.close()
         except Exception as e:
-            logger.exception(f"Helium10 phase error: {e}")
-            _update_campaign_status(db, campaign_uuid, "error", "helium10", 0, str(e))
+            logger.exception(f"Amazon search phase error: {e}")
+            _update_campaign_status(db, campaign_uuid, "error", "amazon_search", 0, str(e))
             return
 
         asins = list(asin_to_keyword.keys())
         if not asins:
             logger.warning(f"Campaign {campaign_id}: no ASINs found in phase 1")
-            _update_campaign_status(db, campaign_uuid, "completed", "helium10", 25)
+            _update_campaign_status(db, campaign_uuid, "completed", "amazon_search", 25)
             campaign.found_count = 0
             db.commit()
             return
