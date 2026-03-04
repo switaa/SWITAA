@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     SPAPI_SELLER_ID: str = ""
     SPAPI_REGION: str = "eu-west-1"
     SPAPI_MARKETPLACE_ID_FR: str = "A13V1IB3VIYZZH"
+    SPAPI_AWS_ACCESS_KEY_ID: str = ""
+    SPAPI_AWS_SECRET_ACCESS_KEY: str = ""
 
     APIFY_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
