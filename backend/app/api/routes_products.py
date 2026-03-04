@@ -33,8 +33,26 @@ class ProductOut(BaseModel):
     image_url: str
     source: str
     status: str
+    niche: Optional[str] = None
+    sub_niche: Optional[str] = None
+    amazon_is_seller: Optional[bool] = None
+    buybox_seller: Optional[str] = None
+    price_stability: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class EnrichResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    total_products: int = 0
+    batches_processed: int = 0
+    enriched: int = 0
+    skipped: int = 0
+    errors: int = 0
+    tokens_before: int = 0
+    tokens_after: int = 0
+    tokens_left: Optional[int] = None
 
 
 @router.get("/", response_model=list[ProductOut])
@@ -42,6 +60,8 @@ def list_products(
     marketplace: str = Query(None),
     category: str = Query(None),
     status: str = Query(None),
+    niche: str = Query(None),
+    sub_niche: str = Query(None),
     min_price: float = Query(None),
     max_price: float = Query(None),
     sort_by: str = Query("created_at"),
@@ -57,6 +77,10 @@ def list_products(
         q = q.filter(Product.category == category)
     if status:
         q = q.filter(Product.status == status)
+    if niche:
+        q = q.filter(Product.niche == niche)
+    if sub_niche:
+        q = q.filter(Product.sub_niche == sub_niche)
     if min_price is not None:
         q = q.filter(Product.price >= min_price)
     if max_price is not None:
@@ -89,6 +113,35 @@ def delete_product(
         raise HTTPException(status_code=404, detail="Product not found")
     db.delete(product)
     db.commit()
+
+
+@router.post("/enrich", response_model=EnrichResponse)
+async def enrich_products(
+    source: str = Query(default="helium10_blackbox"),
+    marketplace: str = Query(default="amazon_fr"),
+    force: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Trigger Keepa enrichment on products matching the source filter.
+
+    Fetches BuyBox info, price stability, BSR trends from Keepa for each
+    product.  Only products missing enrichment data are processed unless
+    *force=True*.
+    """
+    from app.services.enrichment_service import run_keepa_enrichment
+
+    try:
+        result = await run_keepa_enrichment(
+            db=db,
+            source_filter=source,
+            marketplace=marketplace,
+            force=force,
+        )
+        return EnrichResponse(**result)
+    except Exception as e:
+        logger.exception("Keepa enrichment error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class ImportCSVResponse(BaseModel):
