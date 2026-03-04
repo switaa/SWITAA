@@ -1,43 +1,33 @@
-# Marcus
+# Marcus SaaS
 
-Outil de recherche de produits Marketplace. Scrape Helium 10 et Keepa, analyse les opportunités et affiche les résultats dans un dashboard.
+Product research and marketplace management platform.
 
-## Setup
+## Stack
 
-```bash
-pip install -r requirements.txt
-python -m playwright install chromium
-```
+- **Backend**: FastAPI + SQLAlchemy + PostgreSQL + Playwright
+- **Frontend**: Next.js + Tailwind CSS
+- **Automation**: n8n
+- **Infra**: Docker Compose + Nginx + Hetzner Cloud
 
-Copier `.env.example` vers `.env` et remplir les credentials.
-
-## Utilisation
-
-### Recherche de produits
+## Quick Start
 
 ```bash
-python -m marcus.main search --marketplace amazon_fr --min-price 15 --max-price 50
-python -m marcus.main search --marketplace amazon_fr --visible  # avec navigateur visible
+cd infra
+cp .env.example .env  # Edit with your credentials
+docker compose up -d
+docker compose exec backend alembic upgrade head
 ```
 
-### Export des résultats
+## Architecture
 
-```bash
-python -m marcus.main export --format csv
-python -m marcus.main export --format excel
+```
+backend/    - FastAPI API + services (Keepa, SP-API, Helium 10, scoring)
+frontend/   - Next.js web app
+infra/      - Docker Compose + Nginx configs
+n8n/        - Automation workflows
 ```
 
-### Dashboard
+## Domains
 
-```bash
-python -m marcus.main dashboard
-```
-
-## Déploiement Hetzner
-
-```bash
-python deploy/hetzner.py create   # Créer un serveur
-python deploy/hetzner.py status   # Voir le statut
-python deploy/hetzner.py setup    # Instructions de déploiement
-python deploy/hetzner.py destroy  # Supprimer le serveur
-```
+- `marcus.w3lg.fr` - Application
+- `n8n.w3lg.fr` - Workflow automation

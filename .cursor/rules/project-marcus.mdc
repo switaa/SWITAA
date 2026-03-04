@@ -1,33 +1,47 @@
 ---
-description: Contexte général du projet Marcus et conventions
+description: Contexte general du projet Marcus SaaS et regles GitOps
 alwaysApply: true
 ---
 
-# Marcus - Outil de recherche de produits Marketplace
+# Marcus SaaS - Recherche de produits Marketplace
 
 ## Contexte
 
-Marcus est un outil de recherche et d'analyse de produits à vendre sur différentes plateformes marketplace. L'objectif est d'identifier des opportunités de vente rentables.
+Marcus est un SaaS multi-utilisateurs de recherche, analyse et publication de produits sur les marketplaces (Amazon, Fnac, Rue du Commerce, etc.). Il integre Keepa, Amazon SP-API, Helium 10 (via Playwright), et des fournisseurs FTP/SFTP.
 
 ## Langue
 
-- Toujours répondre en **français**
-- Les commentaires de code peuvent rester en anglais
-- Les messages de commit en anglais
+- Toujours repondre en **francais**
+- Commentaires de code en anglais
+- Messages de commit en anglais
 
-## Conventions
+## Regles GitOps (NON NEGOCIABLE)
 
-- Nommer le projet et l'outil "Marcus" dans toute la communication
-- Privilégier la clarté et la maintenabilité du code
-- Documenter les décisions d'architecture importantes
+- **Zero secret dans le code** : tout dans `.env`, jamais commite
+- **Pas de hardcoding** : toute valeur configurable passe par des variables d'environnement
+- **Versionning** : chaque changement passe par un commit
+- **Docker Compose** est la source de verite pour l'infrastructure
+- **Alembic** pour tout changement de schema de base de donnees
+- Verifier les fichiers avant chaque commit pour eviter de commiter des secrets
 
 ## Infrastructure
 
-- Hébergement serveurs : **Hetzner Cloud**
-- Les clés API et secrets sont stockés dans `.env` (jamais commités)
+- Serveur : Hetzner Cloud (135.181.253.60), acces SSH via `ssh marcus`
+- Domaines : `marcus.w3lg.fr` (app), `n8n.w3lg.fr` (automation)
+- DB : PostgreSQL 16 (Docker)
+- CI/CD : GitHub Actions -> SSH deploy
 
-## Sécurité
+## Stack technique
 
-- Ne JAMAIS commiter de secrets, tokens ou clés API
-- Utiliser le fichier `.env` pour toute donnée sensible
-- Vérifier les fichiers avant chaque commit
+- Backend : FastAPI + SQLAlchemy + Alembic + PostgreSQL
+- Frontend : Next.js 14+ App Router + Tailwind CSS + shadcn/ui
+- Automation : n8n
+- Browser automation : Playwright (pour Helium 10, pas d'API disponible)
+- Containerisation : Docker Compose
+
+## Securite
+
+- Ne JAMAIS commiter de secrets, tokens ou cles API
+- Utiliser `.env` pour toute donnee sensible
+- `.env.example` commite comme template (sans valeurs reelles)
+- JWT pour l'authentification utilisateur

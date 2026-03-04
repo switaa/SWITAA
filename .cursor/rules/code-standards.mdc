@@ -1,30 +1,34 @@
 ---
-description: Standards de code et conventions de nommage
+description: Standards de code et conventions
 alwaysApply: true
 ---
 
-# Standards de code
+# Standards de code Marcus
+
+## Python (Backend)
+
+- Style : Black (line-length 100) + isort
+- Types : annotations de type sur toutes les fonctions publiques
+- Async : utiliser async/await pour les I/O (DB, HTTP, fichiers)
+- Erreurs : toujours logger avec contexte, ne jamais ignorer une exception
+- Config : toute valeur configurable via pydantic-settings + variables d'environnement
+
+## TypeScript (Frontend)
+
+- Strict mode active
+- Composants : fonctionnels avec React hooks
+- Styles : Tailwind CSS, pas de CSS custom sauf necessite
+- API : fetch via un client centralise avec gestion d'auth
 
 ## Nommage
 
-- Variables et fonctions : `camelCase`
-- Classes et types : `PascalCase`
-- Constantes : `UPPER_SNAKE_CASE`
-- Fichiers : `kebab-case`
-
-## Structure
-
-- Un fichier = une responsabilité
-- Séparer la logique métier de l'infrastructure
-- Garder les fonctions courtes (< 30 lignes idéalement)
-
-## Gestion d'erreurs
-
-- Toujours gérer les erreurs explicitement
-- Logger les erreurs avec contexte suffisant pour le debug
-- Ne jamais ignorer silencieusement une exception
+- Python : snake_case (variables, fonctions), PascalCase (classes)
+- TypeScript : camelCase (variables, fonctions), PascalCase (composants, types)
+- Fichiers : kebab-case
+- DB tables : snake_case pluriel (users, products, supplier_products)
 
 ## Git
 
-- Commits atomiques (un changement logique par commit)
-- Messages de commit concis en anglais
+- Commits atomiques en anglais
+- Pas de fichiers generes dans le repo (node_modules, __pycache__, .next, etc.)
+- Migrations Alembic pour tout changement de schema

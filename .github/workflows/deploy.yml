@@ -1,0 +1,26 @@
+name: Deploy Marcus
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 135.181.253.60
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /root/marcus
+            git pull origin main
+            cd infra
+            docker compose build --no-cache
+            docker compose up -d
+            docker compose exec -T backend alembic upgrade head
+            echo "Deploy complete at $(date)"

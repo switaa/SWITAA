@@ -1,15 +1,29 @@
-# Dependencies
-node_modules/
-vendor/
-
-# Environment & secrets
+# Secrets
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 
-# OS files
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Data
+*.db
+*.sqlite
+marcus/data/
+backend/data/
+
+# OS
 Thumbs.db
 Desktop.ini
 .DS_Store
@@ -18,13 +32,13 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+.vscode/
+
+# Docker
+docker-compose.override.yml
 
 # Build
 dist/
 build/
 *.log
-
-# Marcus data
-marcus/data/
-__pycache__/
-*.pyc
+exports/

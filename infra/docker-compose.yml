@@ -1,0 +1,108 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: marcus-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-marcus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marcus_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-marcus}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-marcus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - marcus-net
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: marcus-backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-marcus}:${POSTGRES_PASSWORD:-marcus_dev}@db:5432/${POSTGRES_DB:-marcus}
+      APP_ENV: ${APP_ENV:-prod}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      KEEPA_API_KEY: ${KEEPA_API_KEY:-}
+      SPAPI_LWA_CLIENT_ID: ${SPAPI_LWA_CLIENT_ID:-}
+      SPAPI_LWA_CLIENT_SECRET: ${SPAPI_LWA_CLIENT_SECRET:-}
+      SPAPI_LWA_REFRESH_TOKEN: ${SPAPI_LWA_REFRESH_TOKEN:-}
+      SPAPI_ROLE_ARN: ${SPAPI_ROLE_ARN:-}
+      SPAPI_SELLER_ID: ${SPAPI_SELLER_ID:-}
+      SPAPI_REGION: ${SPAPI_REGION:-eu-west-1}
+      SPAPI_MARKETPLACE_ID_FR: ${SPAPI_MARKETPLACE_ID_FR:-A13V1IB3VIYZZH}
+      APIFY_API_KEY: ${APIFY_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1}
+      HELIUM10_EMAIL: ${HELIUM10_EMAIL:-}
+      HELIUM10_PASSWORD: ${HELIUM10_PASSWORD:-}
+      CORS_ORIGINS: '["https://marcus.w3lg.fr","http://localhost:3000"]'
+    volumes:
+      - backend_data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - marcus-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: marcus-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://marcus.w3lg.fr}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - marcus-net
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: marcus-n8n
+    environment:
+      - N8N_HOST=${N8N_HOST:-n8n.w3lg.fr}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - GENERIC_TIMEZONE=Europe/Paris
+      - TZ=Europe/Paris
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-n8n}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-marcus}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-marcus_dev}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../n8n/workflows:/home/node/.n8n/workflows
+    ports:
+      - "5678:5678"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - marcus-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  backend_data:
+  n8n_data:
+
+networks:
+  marcus-net:
+    driver: bridge

@@ -1,0 +1,34 @@
+{
+  "name": "Marcus - Daily Discover",
+  "nodes": [
+    {
+      "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+      "name": "Cron 3h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/discover/run",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {"name": "marketplace", "value": "amazon_fr"},
+            {"name": "source", "value": "keepa"},
+            {"name": "min_price", "value": "10"},
+            {"name": "max_price", "value": "100"}
+          ]
+        },
+        "options": {"timeout": 300000}
+      },
+      "name": "Run Discover",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Cron 3h": {"main": [[{"node": "Run Discover", "type": "main", "index": 0}]]}
+  }
+}
