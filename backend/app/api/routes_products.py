@@ -184,7 +184,7 @@ class ProfitabilityResponse(BaseModel):
 @router.post("/recalc-profitability", response_model=ProfitabilityResponse)
 def recalculate_profitability(
     target_margin_pct: float = Query(default=35.0),
-    mode: str = Query(default="fbm", regex="^(fba|fbm)$"),
+    mode: str = Query(default="fbm", pattern="^(fba|fbm)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -265,7 +265,7 @@ def get_top_products(
     max_bsr: int = Query(default=100000),
     target_margin: float = Query(default=35.0),
     exclude_amazon_seller: bool = Query(default=True),
-    mode: str = Query(default="fbm", regex="^(fba|fbm)$"),
+    mode: str = Query(default="fbm", pattern="^(fba|fbm)$"),
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
