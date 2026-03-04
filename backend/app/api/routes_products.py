@@ -178,18 +178,20 @@ async def enrich_products_spapi(
 class ProfitabilityResponse(BaseModel):
     updated: int
     target_margin_pct: float
+    mode: str = "fbm"
 
 
 @router.post("/recalc-profitability", response_model=ProfitabilityResponse)
 def recalculate_profitability(
     target_margin_pct: float = Query(default=35.0),
+    mode: str = Query(default="fbm", regex="^(fba|fbm)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Recalculate FBA fees and profitability for all opportunities."""
+    """Recalculate fees and profitability for all opportunities (FBA or FBM mode)."""
     from app.services.profitability_service import enrich_opportunities_with_profitability
 
-    result = enrich_opportunities_with_profitability(db, target_margin_pct)
+    result = enrich_opportunities_with_profitability(db, target_margin_pct, mode=mode)
     return ProfitabilityResponse(**result)
 
 
@@ -199,19 +201,21 @@ class ProfitCalcRequest(BaseModel):
     weight_kg: Optional[float] = None
     longest_side_cm: Optional[float] = None
     shipping_to_fba: float = 1.50
+    mode: str = "fbm"
 
 
 class ProfitCalcResponse(BaseModel):
     selling_price: float
     cost_price: float
     referral_fee: float
-    fba_fee: float
-    shipping_to_fba: float
+    fulfillment_fee: float
+    shipping_cost: float
     total_fees: float
     net_profit: float
     margin_pct: float
     roi: float
     break_even_cost: float
+    mode: str = "fbm"
 
 
 @router.post("/calc-profit", response_model=ProfitCalcResponse)
@@ -219,7 +223,7 @@ def calc_profit(
     req: ProfitCalcRequest,
     user: User = Depends(get_current_user),
 ):
-    """Calculate FBA profitability for a single product scenario."""
+    """Calculate profitability for a single product (FBA or FBM mode)."""
     from app.services.profitability_service import calculate_profitability
 
     result = calculate_profitability(
@@ -228,6 +232,7 @@ def calc_profit(
         weight_kg=req.weight_kg,
         longest_side_cm=req.longest_side_cm,
         shipping_to_fba=req.shipping_to_fba,
+        mode=req.mode,
     )
     return ProfitCalcResponse(**result)
 
@@ -260,6 +265,7 @@ def get_top_products(
     max_bsr: int = Query(default=100000),
     target_margin: float = Query(default=35.0),
     exclude_amazon_seller: bool = Query(default=True),
+    mode: str = Query(default="fbm", regex="^(fba|fbm)$"),
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -297,6 +303,7 @@ def get_top_products(
             cost_price=0,
             weight_kg=float(weight) if weight else None,
             longest_side_cm=float(longest) if longest else None,
+            mode=mode,
         )
 
         results.append(TopProductOut(

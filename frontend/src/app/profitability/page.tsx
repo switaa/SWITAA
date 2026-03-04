@@ -27,13 +27,14 @@ interface ProfitCalc {
   selling_price: number;
   cost_price: number;
   referral_fee: number;
-  fba_fee: number;
-  shipping_to_fba: number;
+  fulfillment_fee: number;
+  shipping_cost: number;
   total_fees: number;
   net_profit: number;
   margin_pct: number;
   roi: number;
   break_even_cost: number;
+  mode: string;
 }
 
 interface EnrichStatus {
@@ -57,6 +58,8 @@ export default function ProfitabilityPage() {
   const [maxBsr, setMaxBsr] = useState(100000);
   const [targetMargin, setTargetMargin] = useState(35);
   const [excludeAmazon, setExcludeAmazon] = useState(true);
+
+  const [fulfillmentMode, setFulfillmentMode] = useState<"fbm" | "fba">("fbm");
 
   const [calcPrice, setCalcPrice] = useState("50");
   const [calcCost, setCalcCost] = useState("20");
@@ -121,6 +124,7 @@ export default function ProfitabilityPage() {
         selling_price: parseFloat(calcPrice),
         cost_price: parseFloat(calcCost),
         weight_kg: parseFloat(calcWeight) || null,
+        mode: fulfillmentMode,
       });
       setCalcResult(result);
     } catch {
@@ -147,10 +151,13 @@ export default function ProfitabilityPage() {
   const handleRecalcProfitability = async () => {
     setProfitStatus({ loading: true, result: null });
     try {
-      const data = await api.post<{ updated: number }>(
-        `/api/v1/products/recalc-profitability?target_margin_pct=${targetMargin}`
+      const data = await api.post<{ updated: number; mode: string }>(
+        `/api/v1/products/recalc-profitability?target_margin_pct=${targetMargin}&mode=${fulfillmentMode}`
       );
-      setProfitStatus({ loading: false, result: `${data.updated} opportunites mises a jour` });
+      setProfitStatus({
+        loading: false,
+        result: `${data.updated} opportunites mises a jour (mode ${data.mode.toUpperCase()})`,
+      });
       fetchTopProducts();
     } catch (e) {
       setProfitStatus({ loading: false, result: `Erreur: ${e}` });
@@ -175,11 +182,35 @@ export default function ProfitabilityPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Rentabilite FBA</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Analyse de rentabilite, frais Amazon et Top 100 produits
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Rentabilite Amazon</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Analyse de rentabilite, frais Amazon et Top 100 produits
+          </p>
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setFulfillmentMode("fbm")}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition ${
+              fulfillmentMode === "fbm"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            FBM
+          </button>
+          <button
+            onClick={() => setFulfillmentMode("fba")}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition ${
+              fulfillmentMode === "fba"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            FBA
+          </button>
+        </div>
       </div>
 
       {/* Actions */}
@@ -349,7 +380,11 @@ export default function ProfitabilityPage() {
           <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { label: "Frais referral (15%)", value: fmtPrice(calcResult.referral_fee), color: "text-orange-600" },
-              { label: "Frais FBA", value: fmtPrice(calcResult.fba_fee), color: "text-orange-600" },
+              {
+                label: fulfillmentMode === "fba" ? "Frais FBA" : "Expedition (FBM)",
+                value: fmtPrice(fulfillmentMode === "fba" ? calcResult.fulfillment_fee : calcResult.shipping_cost),
+                color: "text-orange-600",
+              },
               { label: "Total frais", value: fmtPrice(calcResult.total_fees), color: "text-red-600" },
               {
                 label: "Profit net",
