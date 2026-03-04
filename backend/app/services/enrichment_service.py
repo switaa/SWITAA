@@ -1,6 +1,10 @@
-"""Keepa enrichment service — enriches existing products with Keepa API data."""
+"""Keepa enrichment service — enriches existing products with Keepa API data.
+
+Adapts batch size to available tokens and waits for refill between batches.
+"""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -55,19 +59,20 @@ async def run_keepa_enrichment(
     marketplace: str = "amazon_fr",
     category_multiplier: float = 1.5,
     force: bool = False,
+    max_products: int | None = None,
 ) -> dict[str, Any]:
-    """Enrich products matching *source_filter* with Keepa data.
+    """Enrich products with Keepa data, adapting to available tokens.
 
-    By default, only products missing buybox / price_stability data are
-    processed.  Set *force=True* to re-enrich everything.
+    Processes only as many ASINs as tokens allow, using small batches
+    and waiting for refill between them.
     """
     client = KeepaClient()
 
     tokens_before = await client.tokens_left()
-    if tokens_before < 10:
+    if tokens_before < 2:
         return {
             "status": "error",
-            "message": "Insufficient Keepa API tokens",
+            "message": f"Keepa tokens too low ({tokens_before}). Wait for refill.",
             "tokens_left": tokens_before,
         }
 
@@ -83,65 +88,98 @@ async def run_keepa_enrichment(
         return {
             "status": "completed",
             "total_products": 0,
-            "batches_processed": 0,
             "enriched": 0,
             "skipped": 0,
             "errors": 0,
             "tokens_before": tokens_before,
             "tokens_after": tokens_before,
+            "remaining_to_enrich": 0,
         }
 
     asin_to_product: dict[str, Product] = {p.asin: p for p in products}
     asins = list(asin_to_product.keys())
+    if max_products:
+        asins = asins[:max_products]
+
+    batch_size = min(tokens_before - 1, 50)
+    batch_size = max(batch_size, 5)
 
     logger.info(
-        "Starting Keepa enrichment: %d products, ~%d batches",
+        "Keepa enrichment: %d products to process, %d tokens available, batch_size=%d",
         len(asins),
-        (len(asins) + 99) // 100,
+        tokens_before,
+        batch_size,
     )
 
-    enriched_list = await client.enrich_batch(
-        asins=asins,
-        marketplace=marketplace,
-        category_multiplier=category_multiplier,
-    )
-
-    enriched_map: dict[str, dict[str, Any]] = {e["asin"]: e for e in enriched_list}
     enriched_count = 0
     skipped_count = 0
     error_count = 0
+    batches_done = 0
 
-    for asin, product in asin_to_product.items():
-        keepa_data = enriched_map.get(asin)
-        if not keepa_data:
-            skipped_count += 1
-            continue
-        try:
-            _merge_keepa_data(product, keepa_data)
-            enriched_count += 1
-        except Exception:
-            logger.exception("Error merging Keepa data for ASIN %s", asin)
-            error_count += 1
+    for i in range(0, len(asins), batch_size):
+        batch = asins[i : i + batch_size]
 
-    db.commit()
+        tokens = await client.tokens_left()
+        needed = len(batch) + 1
+        if tokens < needed:
+            wait_secs = (needed - tokens) * 60 + 10
+            logger.info(
+                "Waiting %ds for token refill (%d available, %d needed)",
+                wait_secs, tokens, needed,
+            )
+            await asyncio.sleep(wait_secs)
+            tokens = await client.tokens_left()
+            if tokens < needed:
+                logger.warning(
+                    "Still not enough tokens after wait (%d < %d), stopping",
+                    tokens, needed,
+                )
+                break
+
+        enriched_list = await client.enrich_batch(
+            asins=batch,
+            marketplace=marketplace,
+            category_multiplier=category_multiplier,
+        )
+
+        enriched_map = {e["asin"]: e for e in enriched_list}
+        for asin in batch:
+            keepa_data = enriched_map.get(asin)
+            if not keepa_data:
+                skipped_count += 1
+                continue
+            try:
+                product = asin_to_product[asin]
+                _merge_keepa_data(product, keepa_data)
+                enriched_count += 1
+            except Exception:
+                logger.exception("Error merging Keepa data for ASIN %s", asin)
+                error_count += 1
+
+        db.commit()
+        batches_done += 1
+        logger.info(
+            "Batch %d done: %d/%d enriched so far",
+            batches_done, enriched_count, len(asins),
+        )
+
     tokens_after = await client.tokens_left()
+    remaining = total - enriched_count - skipped_count - error_count
 
     logger.info(
-        "Keepa enrichment done: %d enriched, %d skipped, %d errors (tokens %d -> %d)",
-        enriched_count,
-        skipped_count,
-        error_count,
-        tokens_before,
-        tokens_after,
+        "Keepa enrichment done: %d enriched, %d skipped, %d errors, %d remaining (tokens %d -> %d)",
+        enriched_count, skipped_count, error_count, remaining,
+        tokens_before, tokens_after,
     )
 
     return {
-        "status": "completed",
+        "status": "completed" if remaining == 0 else "partial",
         "total_products": total,
-        "batches_processed": (len(asins) + 99) // 100,
+        "batches_processed": batches_done,
         "enriched": enriched_count,
         "skipped": skipped_count,
         "errors": error_count,
+        "remaining_to_enrich": remaining,
         "tokens_before": tokens_before,
         "tokens_after": tokens_after,
     }
