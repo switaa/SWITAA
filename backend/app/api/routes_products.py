@@ -91,6 +91,126 @@ def list_products(
     return q.order_by(order_col.desc()).offset(offset).limit(limit).all()
 
 
+class TopProductOut(BaseModel):
+    id: UUID
+    asin: str
+    title: str
+    brand: str
+    niche: Optional[str]
+    price: float
+    buybox_price: Optional[float]
+    bsr: Optional[int]
+    monthly_sales: Optional[int]
+    seller_count: Optional[int]
+    review_count: Optional[int]
+    rating: Optional[float]
+    amazon_is_seller: Optional[bool]
+    score: float
+    max_cost_price: float
+    total_fees: float
+    image_url: str
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/top", response_model=list[TopProductOut])
+def get_top_products(
+    min_score: float = Query(default=40.0),
+    max_bsr: int = Query(default=100000),
+    target_margin: float = Query(default=35.0),
+    exclude_amazon_seller: bool = Query(default=True),
+    mode: str = Query(default="fbm", pattern="^(fba|fbm)$"),
+    limit: int = Query(default=100, le=500),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get top products filtered by score, BSR, and Amazon-as-seller."""
+    from app.models.opportunity import Opportunity
+    from app.services.profitability_service import calculate_profitability
+
+    q = (
+        db.query(Product, Opportunity.score)
+        .join(Opportunity, Opportunity.product_id == Product.id)
+        .filter(Opportunity.score >= min_score)
+        .filter(Product.price > 0)
+    )
+
+    if max_bsr:
+        q = q.filter((Product.bsr <= max_bsr) | (Product.bsr.is_(None)))
+    if exclude_amazon_seller:
+        q = q.filter((Product.amazon_is_seller == False) | (Product.amazon_is_seller.is_(None)))
+
+    rows = q.order_by(Opportunity.score.desc()).limit(limit).all()
+
+    results = []
+    for product, score in rows:
+        selling_price = float(product.buybox_price or product.price)
+        raw = product.raw_data or {}
+        weight = raw.get("weight")
+        longest = None
+        for k in ("length", "width", "height"):
+            v = raw.get(k)
+            if v and (longest is None or v > longest):
+                longest = v
+
+        prof = calculate_profitability(
+            selling_price=selling_price,
+            cost_price=0,
+            weight_kg=float(weight) if weight else None,
+            longest_side_cm=float(longest) if longest else None,
+            mode=mode,
+        )
+
+        results.append(TopProductOut(
+            id=product.id,
+            asin=product.asin,
+            title=product.title,
+            brand=product.brand,
+            niche=product.niche,
+            price=float(product.price),
+            buybox_price=float(product.buybox_price) if product.buybox_price else None,
+            bsr=product.bsr,
+            monthly_sales=product.monthly_sales,
+            seller_count=product.seller_count,
+            review_count=product.review_count,
+            rating=float(product.rating) if product.rating else None,
+            amazon_is_seller=product.amazon_is_seller,
+            score=float(score),
+            max_cost_price=prof["break_even_cost"] * (1 - target_margin / 100),
+            total_fees=prof["total_fees"],
+            image_url=product.image_url,
+        ))
+
+    return results
+
+
+@router.get("/export-sourcing")
+def export_sourcing_csv(
+    min_score: float = Query(default=40.0),
+    max_bsr: int = Query(default=100000),
+    target_margin: float = Query(default=35.0),
+    exclude_amazon_seller: bool = Query(default=True),
+    limit: int = Query(default=100, le=500),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Export top products as CSV for sourcing tools (Tactical Arbitrage, etc.)."""
+    from app.services.sourcing_export_service import export_top_products_csv
+
+    import io
+    csv_content = export_top_products_csv(
+        db=db, min_score=min_score, max_bsr=max_bsr,
+        target_margin=target_margin, exclude_amazon_seller=exclude_amazon_seller,
+        limit=limit,
+    )
+
+    return StreamingResponse(
+        io.StringIO(csv_content),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=marcus_sourcing_top_products.csv"},
+    )
+
+
 @router.get("/{product_id}", response_model=ProductOut)
 def get_product(
     product_id: UUID,
@@ -235,125 +355,6 @@ def calc_profit(
         mode=req.mode,
     )
     return ProfitCalcResponse(**result)
-
-
-class TopProductOut(BaseModel):
-    id: UUID
-    asin: str
-    title: str
-    brand: str
-    niche: Optional[str]
-    price: float
-    buybox_price: Optional[float]
-    bsr: Optional[int]
-    monthly_sales: Optional[int]
-    seller_count: Optional[int]
-    review_count: Optional[int]
-    rating: Optional[float]
-    amazon_is_seller: Optional[bool]
-    score: float
-    max_cost_price: float
-    total_fees: float
-    image_url: str
-
-    model_config = {"from_attributes": True}
-
-
-@router.get("/top", response_model=list[TopProductOut])
-def get_top_products(
-    min_score: float = Query(default=40.0),
-    max_bsr: int = Query(default=100000),
-    target_margin: float = Query(default=35.0),
-    exclude_amazon_seller: bool = Query(default=True),
-    mode: str = Query(default="fbm", pattern="^(fba|fbm)$"),
-    limit: int = Query(default=100, le=500),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Get top products filtered by score, BSR, and Amazon-as-seller."""
-    from app.services.profitability_service import calculate_profitability
-
-    q = (
-        db.query(Product, Opportunity.score)
-        .join(Opportunity, Opportunity.product_id == Product.id)
-        .filter(Opportunity.score >= min_score)
-        .filter(Product.price > 0)
-    )
-
-    if max_bsr:
-        q = q.filter((Product.bsr <= max_bsr) | (Product.bsr.is_(None)))
-    if exclude_amazon_seller:
-        q = q.filter((Product.amazon_is_seller == False) | (Product.amazon_is_seller.is_(None)))
-
-    rows = q.order_by(Opportunity.score.desc()).limit(limit).all()
-
-    results = []
-    for product, score in rows:
-        selling_price = float(product.buybox_price or product.price)
-        raw = product.raw_data or {}
-        weight = raw.get("weight")
-        longest = None
-        for k in ("length", "width", "height"):
-            v = raw.get(k)
-            if v and (longest is None or v > longest):
-                longest = v
-
-        prof = calculate_profitability(
-            selling_price=selling_price,
-            cost_price=0,
-            weight_kg=float(weight) if weight else None,
-            longest_side_cm=float(longest) if longest else None,
-            mode=mode,
-        )
-
-        results.append(TopProductOut(
-            id=product.id,
-            asin=product.asin,
-            title=product.title,
-            brand=product.brand,
-            niche=product.niche,
-            price=float(product.price),
-            buybox_price=float(product.buybox_price) if product.buybox_price else None,
-            bsr=product.bsr,
-            monthly_sales=product.monthly_sales,
-            seller_count=product.seller_count,
-            review_count=product.review_count,
-            rating=float(product.rating) if product.rating else None,
-            amazon_is_seller=product.amazon_is_seller,
-            score=float(score),
-            max_cost_price=prof["break_even_cost"] * (1 - target_margin / 100),
-            total_fees=prof["total_fees"],
-            image_url=product.image_url,
-        ))
-
-    return results
-
-
-@router.get("/export-sourcing")
-def export_sourcing_csv(
-    min_score: float = Query(default=40.0),
-    max_bsr: int = Query(default=100000),
-    target_margin: float = Query(default=35.0),
-    exclude_amazon_seller: bool = Query(default=True),
-    limit: int = Query(default=100, le=500),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Export top products as CSV for sourcing tools (Tactical Arbitrage, etc.)."""
-    from app.services.sourcing_export_service import export_top_products_csv
-
-    csv_content = export_top_products_csv(
-        db=db, min_score=min_score, max_bsr=max_bsr,
-        target_margin=target_margin, exclude_amazon_seller=exclude_amazon_seller,
-        limit=limit,
-    )
-
-    import io
-    return StreamingResponse(
-        io.StringIO(csv_content),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=marcus_sourcing_top_products.csv"},
-    )
 
 
 class ImportCSVResponse(BaseModel):
