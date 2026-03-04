@@ -1,7 +1,9 @@
-from typing import Optional
+import logging
+from pathlib import Path
+from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,7 @@ from app.core.deps import get_current_user
 from app.models.product import Product
 from app.models.user import User
 
+logger = logging.getLogger("marcus.routes_products")
 router = APIRouter(prefix="/api/v1/products", tags=["products"])
 
 
@@ -86,3 +89,64 @@ def delete_product(
         raise HTTPException(status_code=404, detail="Product not found")
     db.delete(product)
     db.commit()
+
+
+class ImportCSVResponse(BaseModel):
+    file: str
+    niche: str
+    total_rows: int
+    imported: int
+    skipped: int
+    errors: int
+    opportunities_created: int = 0
+
+
+@router.post("/import-csv", response_model=list[ImportCSVResponse])
+def import_helium10_csvs(
+    csv_dir: str = Query(default="C:/DEV/SWITAA/CSV"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Import all Helium 10 Black Box CSV files from a directory."""
+    from app.services.csv_import_service import import_all_csvs
+
+    csv_path = Path(csv_dir)
+    if not csv_path.exists():
+        raise HTTPException(status_code=400, detail=f"Directory not found: {csv_dir}")
+
+    try:
+        results = import_all_csvs(db=db, csv_dir=csv_path, user_id=user.id)
+        return results
+    except Exception as e:
+        logger.exception(f"CSV import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import-csv/file", response_model=ImportCSVResponse)
+async def import_single_csv_file(
+    file: UploadFile = File(...),
+    niche: str = Query(...),
+    sub_niche: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Import a single uploaded Helium 10 CSV file."""
+    import tempfile
+
+    from app.services.csv_import_service import import_single_csv
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="wb") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        result = import_single_csv(
+            db=db, csv_path=tmp_path, niche=niche, sub_niche=sub_niche, user_id=user.id
+        )
+        return result
+    except Exception as e:
+        logger.exception(f"CSV upload import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)

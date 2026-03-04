@@ -1,0 +1,47 @@
+---
+description: Regle immuable - Git commit et push apres chaque action significative pour le versioning
+alwaysApply: true
+---
+
+# Git Auto-Commit & Push
+
+Regle permanente et immuable du projet Marcus.
+
+## Principe
+
+Apres chaque action significative (creation/modification de fichiers, refactoring, ajout de feature, fix), tu DOIS :
+
+1. `git add` des fichiers concernes
+2. `git commit` avec un message descriptif (conventionnel : feat/fix/refactor/docs/chore)
+3. `git push origin main`
+
+Cela permet le versioning continu et le rollback en cas de probleme.
+
+## Quand committer
+
+- Apres chaque feature ou sous-feature completee
+- Apres chaque fix applique
+- Apres chaque modification de configuration
+- Apres chaque ajout/modification de fichiers significatifs
+- En cas de doute : committe
+
+## Quand NE PAS committer
+
+- Fichiers secrets (.env, credentials, cles privees) - verifier le .gitignore
+- Fichiers temporaires ou de cache
+
+## Format du commit
+
+```
+<type>(<scope>): <description courte>
+
+<corps optionnel avec details>
+```
+
+Types : feat, fix, refactor, docs, chore, test, style, perf
+
+## Securite
+
+- Toujours verifier que .env et secrets sont dans .gitignore AVANT de push
+- Ne jamais `--force` push sauf demande explicite
+- Ne jamais modifier l'historique Git sans accord explicite
