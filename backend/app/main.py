@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 from app.api.routes_auth import router as auth_router
+from app.api.routes_campaigns import router as campaigns_router
 from app.api.routes_dashboard import router as dashboard_router
 from app.api.routes_discover import router as discover_router
 from app.api.routes_export import router as export_router
@@ -41,6 +42,7 @@ from app.api.routes_scoring import router as scoring_router
 from app.api.routes_suppliers import router as suppliers_router
 
 app.include_router(auth_router)
+app.include_router(campaigns_router)
 app.include_router(products_router)
 app.include_router(discover_router)
 app.include_router(scoring_router)

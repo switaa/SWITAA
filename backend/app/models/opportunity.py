@@ -15,6 +15,9 @@ class Opportunity(Base):
     product_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True
     )
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("search_campaigns.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     supplier_product_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("supplier_products.id"), nullable=True
     )
@@ -39,3 +42,4 @@ class Opportunity(Base):
     )
 
     product = relationship("Product", back_populates="opportunities")
+    campaign = relationship("SearchCampaign", backref="opportunities")

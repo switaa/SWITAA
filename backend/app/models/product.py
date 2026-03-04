@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,15 @@ class Product(Base):
     source: Mapped[str] = mapped_column(String(50), default="keepa", index=True)
     status: Mapped[str] = mapped_column(String(50), default="new", index=True)
     raw_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    niche: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    sub_niche: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    amazon_is_seller: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    buybox_seller: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    buybox_price: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    price_stability: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fba_eligible: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    hazmat: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    brand_restricted: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )

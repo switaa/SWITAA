@@ -36,12 +36,14 @@ async def run_discovery(job_id: str, request, user_id: str):
             from app.services.helium10_service import Helium10Service
 
             h10 = Helium10Service()
-            products_data = await h10.search_black_box(
-                marketplace=request.marketplace,
-                min_price=request.min_price,
-                max_price=request.max_price,
-                min_revenue=request.min_sales * 30,
-                max_reviews=request.max_reviews,
+            products_data = await h10.search_by_keyword(
+                keyword=request.keyword or request.category or "product",
+                filters={
+                    "marketplace": request.marketplace,
+                    "min_price": request.min_price,
+                    "max_price": request.max_price,
+                    "max_reviews": request.max_reviews,
+                },
             )
             await h10.close()
 

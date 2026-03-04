@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/v1/discover", tags=["discover"])
 class DiscoverRequest(BaseModel):
     marketplace: str = "amazon_fr"
     source: str = "keepa"  # keepa, spapi, helium10
+    keyword: str = ""  # Required for helium10 Black Box search
     category: str = ""
     min_price: float = 10
     max_price: float = 100
