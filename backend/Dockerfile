@@ -14,11 +14,17 @@ RUN pip install --no-cache-dir --upgrade pip && \
     poetry config virtualenvs.create false && \
     poetry install --without dev --no-root
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+
 RUN playwright install --with-deps chromium
 
 COPY . .
 
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app && \
+    mkdir -p /app/data/browser_state /app/data/debug && \
+    chown -R appuser:appuser /app/data
+
 USER appuser
 
 EXPOSE 8000
