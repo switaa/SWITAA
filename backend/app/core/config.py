@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     HELIUM10_EMAIL: str = ""
     HELIUM10_PASSWORD: str = ""
 
+    KEEPA_EMAIL: str = ""
+    KEEPA_PASSWORD: str = ""
+
     @property
     def is_debug(self) -> bool:
         return self.APP_ENV == "dev" or self.DEBUG

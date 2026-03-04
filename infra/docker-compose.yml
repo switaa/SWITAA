@@ -43,6 +43,8 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1}
       HELIUM10_EMAIL: ${HELIUM10_EMAIL:-}
       HELIUM10_PASSWORD: ${HELIUM10_PASSWORD:-}
+      KEEPA_EMAIL: ${KEEPA_EMAIL:-}
+      KEEPA_PASSWORD: ${KEEPA_PASSWORD:-}
       CORS_ORIGINS: '["https://marcus.w3lg.fr","http://localhost:3000"]'
     volumes:
       - backend_data:/app/data
