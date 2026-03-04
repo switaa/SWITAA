@@ -1,7 +1,7 @@
-"""add search_campaigns, search_results tables and new product fields
+"""add search_campaigns, search_results tables, new product fields, and campaign_id to opportunities
 
 Revision ID: 002
-Revises: 001
+Revises: None
 Create Date: 2026-03-04
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSON, UUID
 
 
 revision: str = "002"
-down_revision: Union[str, None] = "001"
+down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -63,8 +63,23 @@ def upgrade() -> None:
     op.create_index("ix_products_niche", "products", ["niche"])
     op.create_index("ix_products_sub_niche", "products", ["sub_niche"])
 
+    op.add_column(
+        "opportunities",
+        sa.Column("campaign_id", UUID(as_uuid=True), nullable=True),
+    )
+    op.create_foreign_key(
+        "fk_opportunities_campaign_id",
+        "opportunities", "search_campaigns",
+        ["campaign_id"], ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_index("ix_opportunities_campaign_id", "opportunities", ["campaign_id"])
+
 
 def downgrade() -> None:
+    op.drop_index("ix_opportunities_campaign_id", table_name="opportunities")
+    op.drop_constraint("fk_opportunities_campaign_id", "opportunities", type_="foreignkey")
+    op.drop_column("opportunities", "campaign_id")
     op.drop_index("ix_products_sub_niche", table_name="products")
     op.drop_index("ix_products_niche", table_name="products")
 
