@@ -318,7 +318,7 @@ async def run_campaign(campaign_id: str, user_id: str) -> None:
         enriched_by_asin = {p["asin"]: p for p in enriched_products}
         _update_campaign_status(db, campaign_uuid, "running", "keepa", 50)
 
-        # Phase 3: SP-API (optional)
+        # Phase 3: SP-API (optional, errors don't stop the pipeline)
         settings = get_settings()
         spapi_configured = bool(
             settings.SPAPI_LWA_CLIENT_ID
@@ -327,18 +327,22 @@ async def run_campaign(campaign_id: str, user_id: str) -> None:
         )
 
         if spapi_configured:
-            from app.services.spapi_client import SPAPIClient
+            try:
+                from app.services.spapi_client import SPAPIClient
 
-            spapi = SPAPIClient()
-            for i, asin in enumerate(asins):
-                pct = 50 + int((i / max(len(asins), 1)) * 20)
-                _update_campaign_status(db, campaign_uuid, "running", "spapi", pct)
-
-                pricing = await spapi.get_competitive_pricing(asin)
-                if pricing and asin in enriched_by_asin:
-                    # Merge SP-API data into enriched product if needed
-                    pass
-                await asyncio.sleep(1)
+                spapi = SPAPIClient()
+                for i, asin in enumerate(asins[:50]):
+                    pct = 50 + int((i / max(len(asins[:50]), 1)) * 20)
+                    _update_campaign_status(db, campaign_uuid, "running", "spapi", pct)
+                    try:
+                        pricing = await spapi.get_competitive_pricing(asin)
+                        if pricing and asin in enriched_by_asin:
+                            pass
+                    except Exception:
+                        logger.debug(f"SP-API error for {asin}, skipping")
+                    await asyncio.sleep(1)
+            except Exception as e:
+                logger.warning(f"SP-API phase skipped due to error: {e}")
         else:
             logger.info("SP-API not configured, skipping phase 3")
 
@@ -351,7 +355,7 @@ async def run_campaign(campaign_id: str, user_id: str) -> None:
         for i, asin in enumerate(asins):
             data = enriched_by_asin.get(asin)
             if not data:
-                data = {"asin": asin, "marketplace": marketplace, "source": "helium10"}
+                data = {"asin": asin, "marketplace": marketplace, "source": "amazon_search"}
             else:
                 data.setdefault("marketplace", marketplace)
 
