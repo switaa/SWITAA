@@ -107,11 +107,26 @@ export default function CampaignDetailPage() {
     }
   };
 
+  const getVal = (r: ProductResult, key: string): number => {
+    switch (key) {
+      case "price": return r.price ?? 0;
+      case "bsr": return r.bsr ?? Infinity;
+      case "monthly_sales": return r.monthly_sales ?? 0;
+      case "seller_count": return r.seller_count ?? 0;
+      case "review_count": return r.review_count ?? 0;
+      case "score": return r.score ?? 0;
+      default: return 0;
+    }
+  };
+
   const sortedResults = [...results].sort((a, b) => {
-    const av = (a as Record<string, unknown>)[sortKey];
-    const bv = (b as Record<string, unknown>)[sortKey];
-    const na = av == null ? -Infinity : Number(av);
-    const nb = bv == null ? -Infinity : Number(bv);
+    if (sortKey === "asin" || sortKey === "title" || sortKey === "decision") {
+      const sa = String((a as ProductResult)[sortKey as keyof ProductResult] ?? "");
+      const sb = String((b as ProductResult)[sortKey as keyof ProductResult] ?? "");
+      return sortDir === "asc" ? sa.localeCompare(sb) : sb.localeCompare(sa);
+    }
+    const na = getVal(a, sortKey);
+    const nb = getVal(b, sortKey);
     return sortDir === "asc" ? na - nb : nb - na;
   });
 
