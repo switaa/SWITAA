@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -16,6 +16,7 @@ class Listing(Base):
         UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True
     )
     marketplace: Mapped[str] = mapped_column(String(50), default="amazon_fr")
+    sku: Mapped[str] = mapped_column(String(255), default="", index=True)
     title: Mapped[str] = mapped_column(String(500), default="")
     bullets: Mapped[list | None] = mapped_column(JSON, nullable=True)
     description: Mapped[str] = mapped_column(Text, default="")
@@ -23,6 +24,7 @@ class Listing(Base):
     brand_name: Mapped[str] = mapped_column(String(255), default="")
     strategy: Mapped[str] = mapped_column(String(50), default="clone_best")
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    marketplace_status: Mapped[str] = mapped_column(String(30), default="not_pushed", index=True)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
@@ -32,3 +34,6 @@ class Listing(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
+    last_push_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    product = relationship("Product", backref="listings")

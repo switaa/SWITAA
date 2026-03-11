@@ -1,0 +1,175 @@
+{
+  "name": "Marcus - TA Import Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ta-import-trigger",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/import/ta-csv",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $json.file }}"
+            },
+            {
+              "name": "min_match_quality",
+              "value": "80"
+            },
+            {
+              "name": "min_roi",
+              "value": "20"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "name": "Import TA CSV",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [500, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "name": "Wait for Import",
+      "type": "n8n-nodes-base.wait",
+      "position": [750, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/import/status/{{ $json.job_id }}",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['Webhook Trigger'].json.token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Check Import Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1000, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/products/enrich-spapi",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['Webhook Trigger'].json.token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "name": "Enrich SP-API",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1250, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/listings/generate-batch",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node['Webhook Trigger'].json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "strategy",
+              "value": "clone_best"
+            },
+            {
+              "name": "min_score",
+              "value": "70"
+            },
+            {
+              "name": "decision",
+              "value": "A_launch"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Generate Listings",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1500, 300],
+      "typeVersion": 3
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Import TA CSV", "type": "main", "index": 0}]]
+    },
+    "Import TA CSV": {
+      "main": [[{"node": "Wait for Import", "type": "main", "index": 0}]]
+    },
+    "Wait for Import": {
+      "main": [[{"node": "Check Import Status", "type": "main", "index": 0}]]
+    },
+    "Check Import Status": {
+      "main": [[{"node": "Enrich SP-API", "type": "main", "index": 0}]]
+    },
+    "Enrich SP-API": {
+      "main": [[{"node": "Generate Listings", "type": "main", "index": 0}]]
+    }
+  }
+}

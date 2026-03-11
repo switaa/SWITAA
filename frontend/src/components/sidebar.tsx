@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/products", label: "Produits", icon: "📦" },
   { href: "/opportunities", label: "Opportunités", icon: "🎯" },
   { href: "/profitability", label: "Rentabilité", icon: "💰" },
+  { href: "/sourcing", label: "Sourcing", icon: "🔎" },
   { href: "/suppliers", label: "Fournisseurs", icon: "🏭" },
   { href: "/listings", label: "Listings", icon: "📝" },
   { href: "/marketplace", label: "Marketplace", icon: "🛒" },

@@ -1,0 +1,111 @@
+{
+  "name": "Marcus - Price Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            },
+            {
+              "triggerAtHour": 12
+            },
+            {
+              "triggerAtHour": 18
+            },
+            {
+              "triggerAtHour": 0
+            }
+          ]
+        }
+      },
+      "name": "Every 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/alerts/run-price-check",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.marcusApiToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "name": "Run Price Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [500, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/alerts/run-stock-check",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.marcusApiToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "name": "Run Stock Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [500, 500],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/alerts/?type=price_drop&status=active&limit=20",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.marcusApiToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Get Active Alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [800, 300],
+      "typeVersion": 3
+    }
+  ],
+  "connections": {
+    "Every 6h": {
+      "main": [
+        [
+          {"node": "Run Price Check", "type": "main", "index": 0},
+          {"node": "Run Stock Check", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Run Price Check": {
+      "main": [[{"node": "Get Active Alerts", "type": "main", "index": 0}]]
+    }
+  }
+}

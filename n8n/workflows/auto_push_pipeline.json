@@ -1,0 +1,136 @@
+{
+  "name": "Marcus - Auto Push Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "name": "Daily 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/listings/?status=approved&limit=200",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.marcusApiToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Get Approved Listings",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [500, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Has Listings?",
+      "type": "n8n-nodes-base.if",
+      "position": [750, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/marketplace/accounts",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.marcusApiToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Get Active Accounts",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1000, 200],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/v1/marketplace/push-batch",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.marcusApiToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "listing_ids",
+              "value": "={{ $node['Get Approved Listings'].json.map(l => l.id) }}"
+            },
+            {
+              "name": "marketplace_account_id",
+              "value": "={{ $json[0].id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "name": "Push Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1250, 200],
+      "typeVersion": 3
+    }
+  ],
+  "connections": {
+    "Daily 8h": {
+      "main": [[{"node": "Get Approved Listings", "type": "main", "index": 0}]]
+    },
+    "Get Approved Listings": {
+      "main": [[{"node": "Has Listings?", "type": "main", "index": 0}]]
+    },
+    "Has Listings?": {
+      "main": [
+        [{"node": "Get Active Accounts", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Get Active Accounts": {
+      "main": [[{"node": "Push Batch", "type": "main", "index": 0}]]
+    }
+  }
+}

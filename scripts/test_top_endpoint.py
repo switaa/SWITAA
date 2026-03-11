@@ -1,4 +1,5 @@
 import httpx
+import time
 
 login = httpx.post("http://localhost:8000/api/v1/auth/login", json={
     "email": "contact@switaa.com",
@@ -11,6 +12,7 @@ if login.status_code != 200:
 
 token = login.json()["access_token"]
 
+t0 = time.time()
 r = httpx.get(
     "http://localhost:8000/api/v1/products/top",
     params={
@@ -21,6 +23,15 @@ r = httpx.get(
         "limit": "5",
     },
     headers={"Authorization": f"Bearer {token}"},
+    timeout=60,
 )
-print(f"Top status: {r.status_code}")
-print(f"Response: {r.text[:2000]}")
+print(f"Top status: {r.status_code} ({time.time()-t0:.1f}s)")
+print(f"Content-Length: {len(r.text)}")
+try:
+    data = r.json()
+    print(f"Items: {len(data)}")
+    if data:
+        print(f"First: {data[0]}")
+except Exception as e:
+    print(f"Parse error: {e}")
+    print(f"Response: {r.text[:500]}")

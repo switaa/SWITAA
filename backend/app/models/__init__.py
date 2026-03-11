@@ -5,6 +5,7 @@ from app.models.opportunity import Opportunity
 from app.models.listing import Listing
 from app.models.marketplace import MarketplaceAccount, PushLog
 from app.models.search_campaign import SearchCampaign, SearchResult
+from app.models.sourcing import SourcingSearch, SourcingResult
 
 __all__ = [
     "User", "Product", "ProductHistory",
@@ -12,4 +13,5 @@ __all__ = [
     "Opportunity", "Listing",
     "MarketplaceAccount", "PushLog",
     "SearchCampaign", "SearchResult",
+    "SourcingSearch", "SourcingResult",
 ]
