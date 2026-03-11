@@ -25,6 +25,7 @@ class Listing(Base):
     strategy: Mapped[str] = mapped_column(String(50), default="clone_best")
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     marketplace_status: Mapped[str] = mapped_column(String(30), default="not_pushed", index=True)
+    fulfillment_channel: Mapped[str] = mapped_column(String(10), default="FBM")
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )

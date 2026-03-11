@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useToast } from "@/components/toast";
+import ActionBar from "@/components/action-bar";
 
 interface Opportunity {
   id: string;
@@ -22,24 +25,24 @@ interface Opportunity {
   seller_count: number | null;
 }
 
-type SortField = "score" | "price" | "decision";
+type SortField = "score" | "price" | "decision" | "margin_pct";
 type SortDir = "asc" | "desc";
 
 const NICHES = [
   { value: "piscine", label: "Piscine" },
   { value: "chauffage", label: "Chauffage" },
-  { value: "electromenager", label: "Électroménager" },
+  { value: "electromenager", label: "Electromenager" },
   { value: "automobile", label: "Automobile" },
   { value: "plomberie", label: "Plomberie" },
   { value: "jardinage", label: "Jardinage" },
-  { value: "electricite", label: "Électricité" },
+  { value: "electricite", label: "Electricite" },
   { value: "outillage", label: "Outillage" },
 ];
 
 const DECISIONS = [
-  { value: "A_launch", label: "A — Lancer" },
-  { value: "B_review", label: "B — À revoir" },
-  { value: "C_drop", label: "C — Abandonner" },
+  { value: "A_launch", label: "A \u2014 Lancer" },
+  { value: "B_review", label: "B \u2014 A revoir" },
+  { value: "C_drop", label: "C \u2014 Abandonner" },
 ];
 
 const PAGE_SIZE = 50;
@@ -55,7 +58,7 @@ const DECISION_STYLES: Record<string, string> = {
 
 const DECISION_LABELS: Record<string, string> = {
   A_launch: "Lancer",
-  B_review: "À revoir",
+  B_review: "A revoir",
   C_drop: "Abandonner",
 };
 
@@ -64,10 +67,7 @@ function ScoreBar({ value, label }: { value: number; label: string }) {
   const color =
     pct >= 70 ? "bg-green-400" : pct >= 40 ? "bg-amber-400" : "bg-red-400";
   return (
-    <div
-      className="flex items-center gap-1.5"
-      title={`${label}: ${value.toFixed(1)}`}
-    >
+    <div className="flex items-center gap-1.5" title={`${label}: ${value.toFixed(1)}`}>
       <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${color}`}
@@ -108,8 +108,11 @@ function ScoreCell({ score }: { score: number }) {
 }
 
 export default function OpportunitiesPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [allData, setAllData] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   const [niche, setNiche] = useState("");
   const [decision, setDecision] = useState("");
@@ -120,16 +123,19 @@ export default function OpportunitiesPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(0);
 
-  // Debounce slider value (300ms)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [strategy, setStrategy] = useState("clone_best");
+  const [fulfillmentMode, setFulfillmentMode] = useState("FBM");
+
   useEffect(() => {
     const timer = setTimeout(() => setMinScore(localScore), 300);
     return () => clearTimeout(timer);
   }, [localScore]);
 
-  // Fetch opportunities when filters change
   useEffect(() => {
     setLoading(true);
     setPage(0);
+    setSelected(new Set());
     const params = new URLSearchParams();
     params.set("limit", "200");
     if (minScore > 0) params.set("min_score", String(minScore));
@@ -143,7 +149,6 @@ export default function OpportunitiesPage() {
       .finally(() => setLoading(false));
   }, [minScore, decision, niche]);
 
-  // Summary cards
   const summary = useMemo(
     () => ({
       total: allData.length,
@@ -151,18 +156,17 @@ export default function OpportunitiesPage() {
       bReview: allData.filter((o) => o.decision === "B_review").length,
       cDrop: allData.filter((o) => o.decision === "C_drop").length,
     }),
-    [allData]
+    [allData],
   );
 
-  // Sort client-side
   const sorted = useMemo(() => {
     const arr = [...allData];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a, b) => {
       if (sortField === "score") return (a.score - b.score) * dir;
       if (sortField === "price") return (a.price - b.price) * dir;
-      if (sortField === "decision")
-        return a.decision.localeCompare(b.decision) * dir;
+      if (sortField === "margin_pct") return (a.margin_pct - b.margin_pct) * dir;
+      if (sortField === "decision") return a.decision.localeCompare(b.decision) * dir;
       return 0;
     });
     return arr;
@@ -181,68 +185,116 @@ export default function OpportunitiesPage() {
     setPage(0);
   };
 
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === displayed.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(displayed.map((o) => o.id)));
+    }
+  };
+
+  const selectAllALaunch = () => {
+    const ids = allData.filter((o) => o.decision === "A_launch").map((o) => o.id);
+    setSelected(new Set(ids));
+  };
+
+  const handleGenerate = async () => {
+    if (selected.size === 0) return;
+    setGenerating(true);
+    try {
+      const res = await api.post<{
+        total_opportunities: number;
+        listings_created: number;
+        listings_updated: number;
+        errors: number;
+      }>("/api/v1/listings/generate-batch", {
+        strategy,
+        min_score: 0,
+        decision: null,
+        limit: selected.size,
+      });
+
+      toast(
+        `${res.listings_created} listing${res.listings_created > 1 ? "s" : ""} genere${res.listings_created > 1 ? "s" : ""}${res.errors > 0 ? `, ${res.errors} erreur${res.errors > 1 ? "s" : ""}` : ""}`,
+        res.errors > 0 ? "error" : "success",
+        { href: "/listings", label: "Voir les listings" },
+      );
+      setSelected(new Set());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur inconnue";
+      toast(`Erreur de generation : ${message}`, "error");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const SortArrow = ({ field }: { field: SortField }) =>
     sortField === field ? (
-      <span className="ml-1 text-blue-600">
-        {sortDir === "asc" ? "↑" : "↓"}
-      </span>
+      <span className="ml-1 text-blue-600">{sortDir === "asc" ? "\u2191" : "\u2193"}</span>
     ) : (
-      <span className="ml-1 text-gray-300">↕</span>
+      <span className="ml-1 text-gray-300">{"\u2195"}</span>
     );
 
+  const allChecked = displayed.length > 0 && selected.size === displayed.length;
+  const someChecked = selected.size > 0 && selected.size < displayed.length;
+
   return (
-    <div className="space-y-5">
-      {/* ── Header ── */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Opportunités</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Produits analysés et scorés par l&#39;algorithme
-        </p>
+    <div className="space-y-5 pb-20">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Opportunites</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Produits analyses et scores par l&apos;algorithme
+          </p>
+        </div>
+        {summary.aLaunch > 0 && (
+          <button
+            onClick={selectAllALaunch}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition shadow-sm"
+          >
+            Selectionner les {summary.aLaunch} A_launch
+          </button>
+        )}
       </div>
 
-      {/* ── Summary Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-            Total
-          </p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">
-            {summary.total}
-          </p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{summary.total}</p>
         </div>
         <div className="bg-white rounded-xl border-l-4 border-l-green-500 border border-gray-200 p-5 shadow-sm">
           <p className="text-xs font-medium text-green-600 uppercase tracking-wide">
-            A — Lancer
+            A &mdash; Lancer
           </p>
-          <p className="text-3xl font-bold text-green-700 mt-2">
-            {summary.aLaunch}
-          </p>
+          <p className="text-3xl font-bold text-green-700 mt-2">{summary.aLaunch}</p>
         </div>
         <div className="bg-white rounded-xl border-l-4 border-l-yellow-500 border border-gray-200 p-5 shadow-sm">
           <p className="text-xs font-medium text-yellow-600 uppercase tracking-wide">
-            B — À revoir
+            B &mdash; A revoir
           </p>
-          <p className="text-3xl font-bold text-yellow-700 mt-2">
-            {summary.bReview}
-          </p>
+          <p className="text-3xl font-bold text-yellow-700 mt-2">{summary.bReview}</p>
         </div>
         <div className="bg-white rounded-xl border-l-4 border-l-red-500 border border-gray-200 p-5 shadow-sm">
           <p className="text-xs font-medium text-red-600 uppercase tracking-wide">
-            C — Abandonner
+            C &mdash; Abandonner
           </p>
-          <p className="text-3xl font-bold text-red-700 mt-2">
-            {summary.cDrop}
-          </p>
+          <p className="text-3xl font-bold text-red-700 mt-2">{summary.cDrop}</p>
         </div>
       </div>
 
-      {/* ── Filters ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Niche
-            </label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Niche</label>
             <select
               value={niche}
               onChange={(e) => setNiche(e.target.value)}
@@ -257,15 +309,13 @@ export default function OpportunitiesPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Décision
-            </label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Decision</label>
             <select
               value={decision}
               onChange={(e) => setDecision(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             >
-              <option value="">Toutes les décisions</option>
+              <option value="">Toutes les decisions</option>
               {DECISIONS.map((d) => (
                 <option key={d.value} value={d.value}>
                   {d.label}
@@ -295,12 +345,22 @@ export default function OpportunitiesPage() {
         </div>
       </div>
 
-      {/* ── Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+                <th className="px-3 py-3 text-center w-10">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someChecked;
+                    }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 <th className="px-3 py-3 text-left font-medium">ASIN</th>
                 <th className="px-3 py-3 text-left font-medium">Titre</th>
                 <th className="px-3 py-3 text-left font-medium">Niche</th>
@@ -317,16 +377,20 @@ export default function OpportunitiesPage() {
                   Score <SortArrow field="score" />
                 </th>
                 <th className="px-3 py-3 text-center font-medium">Marge</th>
-                <th className="px-3 py-3 text-center font-medium">
-                  Concurrence
-                </th>
+                <th className="px-3 py-3 text-center font-medium">Concurrence</th>
                 <th className="px-3 py-3 text-center font-medium">Demande</th>
                 <th className="px-3 py-3 text-center font-medium">BSR</th>
                 <th
                   className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("margin_pct")}
+                >
+                  Marge % <SortArrow field="margin_pct" />
+                </th>
+                <th
+                  className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
                   onClick={() => handleSort("decision")}
                 >
-                  Décision <SortArrow field="decision" />
+                  Decision <SortArrow field="decision" />
                 </th>
                 <th className="px-3 py-3 text-right font-medium">Vendeurs</th>
               </tr>
@@ -335,7 +399,7 @@ export default function OpportunitiesPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 11 }).map((_, j) => (
+                    {Array.from({ length: 13 }).map((_, j) => (
                       <td key={j} className="px-3 py-3">
                         <div className="h-4 bg-gray-100 rounded w-full" />
                       </td>
@@ -344,103 +408,105 @@ export default function OpportunitiesPage() {
                 ))
               ) : displayed.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={11}
-                    className="px-4 py-16 text-center text-gray-400"
-                  >
-                    Aucune opportunité trouvée avec ces critères.
+                  <td colSpan={13} className="px-4 py-16 text-center text-gray-400">
+                    Aucune opportunite trouvee avec ces criteres.
                   </td>
                 </tr>
               ) : (
-                displayed.map((o) => (
-                  <tr
-                    key={o.id}
-                    className="hover:bg-blue-50/40 transition-colors"
-                  >
-                    {/* ASIN */}
-                    <td className="px-3 py-2.5">
-                      <a
-                        href={`https://www.amazon.fr/dp/${o.asin}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                      >
-                        {o.asin}
-                      </a>
-                    </td>
-
-                    {/* Title */}
-                    <td className="px-3 py-2.5 max-w-[220px]">
-                      <span
-                        className="block truncate text-gray-800"
-                        title={o.title}
-                      >
-                        {o.title}
-                      </span>
-                    </td>
-
-                    {/* Niche */}
-                    <td className="px-3 py-2.5">
-                      {o.niche ? (
-                        <span className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
-                          {o.niche}
+                displayed.map((o) => {
+                  const isSelected = selected.has(o.id);
+                  return (
+                    <tr
+                      key={o.id}
+                      className={`transition-colors cursor-pointer ${
+                        isSelected ? "bg-blue-50/60" : "hover:bg-blue-50/40"
+                      }`}
+                      onClick={() => toggleSelect(o.id)}
+                    >
+                      <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(o.id)}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <a
+                          href={`https://www.amazon.fr/dp/${o.asin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {o.asin}
+                        </a>
+                      </td>
+                      <td className="px-3 py-2.5 max-w-[220px]">
+                        <span className="block truncate text-gray-800" title={o.title}>
+                          {o.title}
                         </span>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-
-                    {/* Price */}
-                    <td className="px-3 py-2.5 text-right font-semibold text-gray-900">
-                      {fmtPrice(o.price)}
-                    </td>
-
-                    {/* Score */}
-                    <td className="px-3 py-2.5 text-center">
-                      <ScoreCell score={o.score} />
-                    </td>
-
-                    {/* Sub-scores */}
-                    <td className="px-3 py-2.5">
-                      <ScoreBar value={o.margin_score} label="Marge" />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <ScoreBar
-                        value={o.competition_score}
-                        label="Concurrence"
-                      />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <ScoreBar value={o.demand_score} label="Demande" />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <ScoreBar value={o.bsr_score} label="BSR" />
-                    </td>
-
-                    {/* Decision */}
-                    <td className="px-3 py-2.5 text-center">
-                      <DecisionBadge decision={o.decision} />
-                    </td>
-
-                    {/* Sellers */}
-                    <td className="px-3 py-2.5 text-right text-gray-600">
-                      {o.seller_count ?? "—"}
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {o.niche ? (
+                          <span className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
+                            {o.niche}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-semibold text-gray-900">
+                        {fmtPrice(o.price)}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <ScoreCell score={o.score} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ScoreBar value={o.margin_score} label="Marge" />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ScoreBar value={o.competition_score} label="Concurrence" />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ScoreBar value={o.demand_score} label="Demande" />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ScoreBar value={o.bsr_score} label="BSR" />
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-lg text-xs font-bold tabular-nums ${
+                            o.margin_pct >= 30
+                              ? "bg-green-50 text-green-700"
+                              : o.margin_pct >= 15
+                                ? "bg-yellow-50 text-yellow-700"
+                                : "bg-red-50 text-red-700"
+                          }`}
+                        >
+                          {o.margin_pct.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <DecisionBadge decision={o.decision} />
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-gray-600">
+                        {o.seller_count ?? "\u2014"}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Pagination ── */}
       {!loading && sorted.length > 0 && (
         <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-5 py-3 shadow-sm">
           <p className="text-sm text-gray-500">
-            {page * PAGE_SIZE + 1}–
-            {Math.min((page + 1) * PAGE_SIZE, sorted.length)} sur{" "}
-            {sorted.length} opportunités
+            {page * PAGE_SIZE + 1}&ndash;
+            {Math.min((page + 1) * PAGE_SIZE, sorted.length)} sur {sorted.length} opportunites
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -448,7 +514,7 @@ export default function OpportunitiesPage() {
               disabled={page === 0}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              ← Précédent
+              &larr; Precedent
             </button>
             <span className="text-sm font-medium text-gray-700 px-3">
               Page {page + 1} / {totalPages}
@@ -458,11 +524,59 @@ export default function OpportunitiesPage() {
               disabled={page >= totalPages - 1}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              Suivant →
+              Suivant &rarr;
             </button>
           </div>
         </div>
       )}
+
+      <ActionBar count={selected.size} onClear={() => setSelected(new Set())}>
+        <select
+          value={strategy}
+          onChange={(e) => setStrategy(e.target.value)}
+          className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+        >
+          <option value="clone_best">Clone (SP-API)</option>
+          <option value="ai_optimize">IA (OpenAI)</option>
+        </select>
+        <select
+          value={fulfillmentMode}
+          onChange={(e) => setFulfillmentMode(e.target.value)}
+          className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+        >
+          <option value="FBM">FBM (expedition directe)</option>
+          <option value="FBA">FBA (stock Amazon)</option>
+        </select>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition shadow-sm"
+        >
+          {generating ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              Generation...
+            </span>
+          ) : (
+            `Generer ${selected.size} listing${selected.size > 1 ? "s" : ""}`
+          )}
+        </button>
+      </ActionBar>
     </div>
   );
 }

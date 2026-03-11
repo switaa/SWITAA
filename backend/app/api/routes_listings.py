@@ -1,12 +1,14 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.listing import Listing
+from app.models.product import Product
 from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/listings", tags=["listings"])
@@ -21,6 +23,7 @@ class ListingCreate(BaseModel):
     search_terms: str = ""
     brand_name: str = ""
     strategy: str = "clone_best"
+    fulfillment_channel: str = "FBM"
 
 
 class ListingOut(BaseModel):
@@ -35,6 +38,12 @@ class ListingOut(BaseModel):
     strategy: str
     status: str
     sku: str
+    marketplace_status: str
+    fulfillment_channel: str
+    created_at: datetime | None = None
+    asin: str | None = None
+    price: float | None = None
+    image_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -53,6 +62,34 @@ class GenerateBatchResponse(BaseModel):
     errors: int
 
 
+def _listing_to_out(listing: Listing) -> dict:
+    """Convert a Listing ORM object to a dict with joined Product fields."""
+    d = {
+        "id": listing.id,
+        "product_id": listing.product_id,
+        "marketplace": listing.marketplace,
+        "title": listing.title,
+        "bullets": listing.bullets,
+        "description": listing.description,
+        "search_terms": listing.search_terms,
+        "brand_name": listing.brand_name,
+        "strategy": listing.strategy,
+        "status": listing.status,
+        "sku": listing.sku,
+        "marketplace_status": listing.marketplace_status,
+        "fulfillment_channel": listing.fulfillment_channel,
+        "created_at": listing.created_at,
+        "asin": None,
+        "price": None,
+        "image_url": None,
+    }
+    if listing.product:
+        d["asin"] = listing.product.asin
+        d["price"] = listing.product.price
+        d["image_url"] = getattr(listing.product, "image_url", None)
+    return d
+
+
 @router.get("/", response_model=list[ListingOut])
 def list_listings(
     status: str = Query(None),
@@ -60,10 +97,11 @@ def list_listings(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    q = db.query(Listing)
+    q = db.query(Listing).options(joinedload(Listing.product))
     if status:
         q = q.filter(Listing.status == status)
-    return q.order_by(Listing.updated_at.desc()).limit(limit).all()
+    listings = q.order_by(Listing.updated_at.desc()).limit(limit).all()
+    return [_listing_to_out(l) for l in listings]
 
 
 @router.post("/", response_model=ListingOut, status_code=201)
@@ -76,7 +114,7 @@ def create_listing(
     db.add(listing)
     db.commit()
     db.refresh(listing)
-    return listing
+    return _listing_to_out(listing)
 
 
 @router.put("/{listing_id}", response_model=ListingOut)
@@ -86,14 +124,19 @@ def update_listing(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    listing = (
+        db.query(Listing)
+        .options(joinedload(Listing.product))
+        .filter(Listing.id == listing_id)
+        .first()
+    )
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     for k, v in req.model_dump().items():
         setattr(listing, k, v)
     db.commit()
     db.refresh(listing)
-    return listing
+    return _listing_to_out(listing)
 
 
 @router.post("/{listing_id}/approve", response_model=ListingOut)
@@ -102,13 +145,35 @@ def approve_listing(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    listing = (
+        db.query(Listing)
+        .options(joinedload(Listing.product))
+        .filter(Listing.id == listing_id)
+        .first()
+    )
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     listing.status = "approved"
     db.commit()
     db.refresh(listing)
-    return listing
+    return _listing_to_out(listing)
+
+
+@router.post("/approve-batch")
+def approve_batch(
+    listing_ids: list[str],
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Approve multiple listings at once."""
+    updated = 0
+    for lid in listing_ids:
+        listing = db.query(Listing).filter(Listing.id == lid).first()
+        if listing and listing.status != "approved":
+            listing.status = "approved"
+            updated += 1
+    db.commit()
+    return {"approved": updated, "total": len(listing_ids)}
 
 
 @router.post("/generate/{product_id}", response_model=ListingOut)
@@ -128,7 +193,7 @@ async def generate_listing_for_product(
             user_id=str(user.id),
             strategy=strategy,
         )
-        return listing
+        return _listing_to_out(listing)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
