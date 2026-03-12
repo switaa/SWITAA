@@ -7,6 +7,8 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from sqlalchemy import or_
+
 from app.core.config import get_settings
 from app.models.listing import Listing
 from app.models.opportunity import Opportunity
@@ -258,7 +260,7 @@ async def generate_batch_listings(
     if decision:
         query = query.filter(Opportunity.decision == decision)
 
-    query = query.filter(Product.brand_restricted != True)
+    query = query.filter(or_(Product.brand_restricted == False, Product.brand_restricted.is_(None)))
 
     opportunities = query.order_by(Opportunity.score.desc()).limit(limit).all()
 
