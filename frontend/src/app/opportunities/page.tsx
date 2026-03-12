@@ -26,9 +26,12 @@ interface Opportunity {
   source: string;
   source_url: string | null;
   gross_roi: number | null;
+  monthly_sales: number | null;
+  bsr: number | null;
+  est_monthly_revenue: number | null;
 }
 
-type SortField = "score" | "price" | "decision" | "margin_pct" | "cost_price" | "gross_roi";
+type SortField = "score" | "price" | "decision" | "margin_pct" | "cost_price" | "gross_roi" | "monthly_sales" | "est_monthly_revenue" | "bsr";
 type SortDir = "asc" | "desc";
 
 const NICHES = [
@@ -52,6 +55,9 @@ const PAGE_SIZE = 50;
 
 const fmtPrice = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+
+const fmtNum = (n: number) =>
+  new Intl.NumberFormat("fr-FR").format(Math.round(n));
 
 const DECISION_STYLES: Record<string, string> = {
   A_launch: "bg-green-100 text-green-700 border-green-200",
@@ -171,6 +177,9 @@ export default function OpportunitiesPage() {
       if (sortField === "cost_price") return (a.cost_price - b.cost_price) * dir;
       if (sortField === "margin_pct") return (a.margin_pct - b.margin_pct) * dir;
       if (sortField === "gross_roi") return ((a.gross_roi ?? 0) - (b.gross_roi ?? 0)) * dir;
+      if (sortField === "monthly_sales") return ((a.monthly_sales ?? 0) - (b.monthly_sales ?? 0)) * dir;
+      if (sortField === "est_monthly_revenue") return ((a.est_monthly_revenue ?? 0) - (b.est_monthly_revenue ?? 0)) * dir;
+      if (sortField === "bsr") return ((a.bsr ?? 999999) - (b.bsr ?? 999999)) * dir;
       if (sortField === "decision") return a.decision.localeCompare(b.decision) * dir;
       return 0;
     });
@@ -394,6 +403,24 @@ export default function OpportunitiesPage() {
                   ROI <SortArrow field="gross_roi" />
                 </th>
                 <th
+                  className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("monthly_sales")}
+                >
+                  Ventes/mois <SortArrow field="monthly_sales" />
+                </th>
+                <th
+                  className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("est_monthly_revenue")}
+                >
+                  CA mensuel <SortArrow field="est_monthly_revenue" />
+                </th>
+                <th
+                  className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("bsr")}
+                >
+                  BSR <SortArrow field="bsr" />
+                </th>
+                <th
                   className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
                   onClick={() => handleSort("score")}
                 >
@@ -414,7 +441,7 @@ export default function OpportunitiesPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 12 }).map((_, j) => (
+                    {Array.from({ length: 15 }).map((_, j) => (
                       <td key={j} className="px-3 py-3">
                         <div className="h-4 bg-gray-100 rounded w-full" />
                       </td>
@@ -423,7 +450,7 @@ export default function OpportunitiesPage() {
                 ))
               ) : displayed.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-16 text-center text-gray-400">
+                  <td colSpan={15} className="px-4 py-16 text-center text-gray-400">
                     Aucune opportunite trouvee avec ces criteres.
                   </td>
                 </tr>
@@ -506,6 +533,55 @@ export default function OpportunitiesPage() {
                             }`}
                           >
                             {o.gross_roi.toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {o.monthly_sales != null ? (
+                          <span
+                            className="font-semibold text-gray-900 cursor-help"
+                            title={`${(o.monthly_sales / 30).toFixed(1)} ventes/jour\n${(o.monthly_sales / 4.33).toFixed(1)} ventes/semaine\n${o.monthly_sales} ventes/mois`}
+                          >
+                            {fmtNum(o.monthly_sales)}
+                            <span className="text-xs text-gray-400 ml-1">u.</span>
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {o.est_monthly_revenue != null ? (
+                          <span
+                            className={`font-semibold cursor-help ${
+                              o.est_monthly_revenue >= 3000
+                                ? "text-green-700"
+                                : o.est_monthly_revenue >= 1000
+                                  ? "text-yellow-700"
+                                  : "text-gray-600"
+                            }`}
+                            title={`${fmtPrice(o.est_monthly_revenue / 30)} CA/jour\n${fmtPrice(o.est_monthly_revenue / 4.33)} CA/semaine\n${fmtPrice(o.est_monthly_revenue)} CA/mois`}
+                          >
+                            {fmtPrice(o.est_monthly_revenue)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {o.bsr != null ? (
+                          <span
+                            className={`font-mono text-xs tabular-nums ${
+                              o.bsr <= 20000
+                                ? "text-green-700 font-semibold"
+                                : o.bsr <= 100000
+                                  ? "text-yellow-700"
+                                  : "text-gray-500"
+                            }`}
+                            title={`BSR (Best Sellers Rank): #${fmtNum(o.bsr)}\nPlus le BSR est bas, plus le produit se vend`}
+                          >
+                            #{fmtNum(o.bsr)}
                           </span>
                         ) : (
                           <span className="text-gray-300">&mdash;</span>

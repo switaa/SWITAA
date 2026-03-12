@@ -34,6 +34,9 @@ class OpportunityOut(BaseModel):
     source: str = ""
     source_url: Optional[str] = None
     gross_roi: Optional[float] = None
+    monthly_sales: Optional[int] = None
+    bsr: Optional[int] = None
+    est_monthly_revenue: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -68,6 +71,8 @@ def list_opportunities(
             Product.seller_count,
             Product.source,
             Product.raw_data,
+            Product.monthly_sales,
+            Product.bsr,
         )
         .join(Product, Opportunity.product_id == Product.id)
         .filter(Opportunity.score >= min_score)
@@ -104,6 +109,9 @@ def list_opportunities(
                 source=r.source or "",
                 source_url=source_url,
                 gross_roi=float(gross_roi) if gross_roi else None,
+                monthly_sales=r.monthly_sales,
+                bsr=r.bsr,
+                est_monthly_revenue=round(float(r.price) * r.monthly_sales, 2) if r.monthly_sales else None,
             )
         )
     return results
