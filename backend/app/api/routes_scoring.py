@@ -31,6 +31,9 @@ class OpportunityOut(BaseModel):
     bsr_score: float = 0
     margin_score: float = 0
     seller_count: Optional[int] = None
+    source: str = ""
+    source_url: Optional[str] = None
+    gross_roi: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -63,6 +66,8 @@ def list_opportunities(
             Opportunity.bsr_score,
             Opportunity.margin_score,
             Product.seller_count,
+            Product.source,
+            Product.raw_data,
         )
         .join(Product, Opportunity.product_id == Product.id)
         .filter(Opportunity.score >= min_score)
@@ -73,24 +78,32 @@ def list_opportunities(
         q = q.filter(Product.niche == niche)
 
     rows = q.order_by(Opportunity.score.desc()).offset(offset).limit(limit).all()
-    return [
-        OpportunityOut(
-            id=r.id,
-            asin=r.asin,
-            title=r.title,
-            price=float(r.price),
-            cost_price=float(r.cost_price),
-            margin_pct=float(r.margin_pct),
-            score=float(r.score),
-            decision=r.decision,
-            marketplace=r.marketplace,
-            niche=r.niche,
-            sub_niche=r.sub_niche,
-            competition_score=float(r.competition_score),
-            demand_score=float(r.demand_score),
-            bsr_score=float(r.bsr_score),
-            margin_score=float(r.margin_score),
-            seller_count=r.seller_count,
+    results = []
+    for r in rows:
+        raw = r.raw_data or {}
+        source_url = raw.get("source_url") or None
+        gross_roi = raw.get("ta_gross_roi")
+        results.append(
+            OpportunityOut(
+                id=r.id,
+                asin=r.asin,
+                title=r.title,
+                price=float(r.price),
+                cost_price=float(r.cost_price),
+                margin_pct=float(r.margin_pct),
+                score=float(r.score),
+                decision=r.decision,
+                marketplace=r.marketplace,
+                niche=r.niche,
+                sub_niche=r.sub_niche,
+                competition_score=float(r.competition_score),
+                demand_score=float(r.demand_score),
+                bsr_score=float(r.bsr_score),
+                margin_score=float(r.margin_score),
+                seller_count=r.seller_count,
+                source=r.source or "",
+                source_url=source_url,
+                gross_roi=float(gross_roi) if gross_roi else None,
+            )
         )
-        for r in rows
-    ]
+    return results

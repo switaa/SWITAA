@@ -23,9 +23,12 @@ interface Opportunity {
   bsr_score: number;
   margin_score: number;
   seller_count: number | null;
+  source: string;
+  source_url: string | null;
+  gross_roi: number | null;
 }
 
-type SortField = "score" | "price" | "decision" | "margin_pct";
+type SortField = "score" | "price" | "decision" | "margin_pct" | "cost_price" | "gross_roi";
 type SortDir = "asc" | "desc";
 
 const NICHES = [
@@ -165,7 +168,9 @@ export default function OpportunitiesPage() {
     arr.sort((a, b) => {
       if (sortField === "score") return (a.score - b.score) * dir;
       if (sortField === "price") return (a.price - b.price) * dir;
+      if (sortField === "cost_price") return (a.cost_price - b.cost_price) * dir;
       if (sortField === "margin_pct") return (a.margin_pct - b.margin_pct) * dir;
+      if (sortField === "gross_roi") return ((a.gross_roi ?? 0) - (b.gross_roi ?? 0)) * dir;
       if (sortField === "decision") return a.decision.localeCompare(b.decision) * dir;
       return 0;
     });
@@ -368,18 +373,14 @@ export default function OpportunitiesPage() {
                   className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
                   onClick={() => handleSort("price")}
                 >
-                  Prix <SortArrow field="price" />
+                  Prix Amazon <SortArrow field="price" />
                 </th>
                 <th
-                  className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
-                  onClick={() => handleSort("score")}
+                  className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("cost_price")}
                 >
-                  Score <SortArrow field="score" />
+                  Prix achat <SortArrow field="cost_price" />
                 </th>
-                <th className="px-3 py-3 text-center font-medium">Marge</th>
-                <th className="px-3 py-3 text-center font-medium">Concurrence</th>
-                <th className="px-3 py-3 text-center font-medium">Demande</th>
-                <th className="px-3 py-3 text-center font-medium">BSR</th>
                 <th
                   className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
                   onClick={() => handleSort("margin_pct")}
@@ -388,18 +389,32 @@ export default function OpportunitiesPage() {
                 </th>
                 <th
                   className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("gross_roi")}
+                >
+                  ROI <SortArrow field="gross_roi" />
+                </th>
+                <th
+                  className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("score")}
+                >
+                  Score <SortArrow field="score" />
+                </th>
+                <th className="px-3 py-3 text-center font-medium">Concurrence</th>
+                <th className="px-3 py-3 text-center font-medium">Demande</th>
+                <th
+                  className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
                   onClick={() => handleSort("decision")}
                 >
                   Decision <SortArrow field="decision" />
                 </th>
-                <th className="px-3 py-3 text-right font-medium">Vendeurs</th>
+                <th className="px-3 py-3 text-center font-medium">Source</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 13 }).map((_, j) => (
+                    {Array.from({ length: 12 }).map((_, j) => (
                       <td key={j} className="px-3 py-3">
                         <div className="h-4 bg-gray-100 rounded w-full" />
                       </td>
@@ -408,7 +423,7 @@ export default function OpportunitiesPage() {
                 ))
               ) : displayed.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-16 text-center text-gray-400">
+                  <td colSpan={12} className="px-4 py-16 text-center text-gray-400">
                     Aucune opportunite trouvee avec ces criteres.
                   </td>
                 </tr>
@@ -459,20 +474,12 @@ export default function OpportunitiesPage() {
                       <td className="px-3 py-2.5 text-right font-semibold text-gray-900">
                         {fmtPrice(o.price)}
                       </td>
-                      <td className="px-3 py-2.5 text-center">
-                        <ScoreCell score={o.score} />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <ScoreBar value={o.margin_score} label="Marge" />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <ScoreBar value={o.competition_score} label="Concurrence" />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <ScoreBar value={o.demand_score} label="Demande" />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <ScoreBar value={o.bsr_score} label="BSR" />
+                      <td className="px-3 py-2.5 text-right">
+                        {o.cost_price > 0 ? (
+                          <span className="font-semibold text-orange-700">{fmtPrice(o.cost_price)}</span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <span
@@ -488,10 +495,53 @@ export default function OpportunitiesPage() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-center">
+                        {o.gross_roi != null ? (
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-lg text-xs font-bold tabular-nums ${
+                              o.gross_roi >= 50
+                                ? "bg-green-50 text-green-700"
+                                : o.gross_roi >= 20
+                                  ? "bg-yellow-50 text-yellow-700"
+                                  : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {o.gross_roi.toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <ScoreCell score={o.score} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ScoreBar value={o.competition_score} label="Concurrence" />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ScoreBar value={o.demand_score} label="Demande" />
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
                         <DecisionBadge decision={o.decision} />
                       </td>
-                      <td className="px-3 py-2.5 text-right text-gray-600">
-                        {o.seller_count ?? "\u2014"}
+                      <td className="px-3 py-2.5 text-center">
+                        {o.source_url ? (
+                          <a
+                            href={o.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full text-xs font-medium hover:bg-orange-100 transition"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Castorama
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            {o.source === "tactical_arbitrage" ? "TA" : o.source === "helium10_blackbox" ? "H10" : "\u2014"}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
