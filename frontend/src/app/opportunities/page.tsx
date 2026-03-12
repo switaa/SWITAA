@@ -59,6 +59,33 @@ const fmtPrice = (n: number) =>
 const fmtNum = (n: number) =>
   new Intl.NumberFormat("fr-FR").format(Math.round(n));
 
+const MARKETPLACE_FLAGS: Record<string, { flag: string; label: string }> = {
+  amazon_fr: { flag: "\u{1F1EB}\u{1F1F7}", label: "Amazon France" },
+  amazon_de: { flag: "\u{1F1E9}\u{1F1EA}", label: "Amazon Allemagne" },
+  amazon_es: { flag: "\u{1F1EA}\u{1F1F8}", label: "Amazon Espagne" },
+  amazon_it: { flag: "\u{1F1EE}\u{1F1F9}", label: "Amazon Italie" },
+  amazon_co_uk: { flag: "\u{1F1EC}\u{1F1E7}", label: "Amazon UK" },
+  amazon_nl: { flag: "\u{1F1F3}\u{1F1F1}", label: "Amazon Pays-Bas" },
+  amazon_be: { flag: "\u{1F1E7}\u{1F1EA}", label: "Amazon Belgique" },
+  amazon_com: { flag: "\u{1F1FA}\u{1F1F8}", label: "Amazon US" },
+};
+
+function getSourceCountry(sourceUrl: string | null): { flag: string; label: string } | null {
+  if (!sourceUrl) return null;
+  try {
+    const host = new URL(sourceUrl).hostname;
+    if (host.endsWith(".fr")) return { flag: "\u{1F1EB}\u{1F1F7}", label: "France" };
+    if (host.endsWith(".de")) return { flag: "\u{1F1E9}\u{1F1EA}", label: "Allemagne" };
+    if (host.endsWith(".es")) return { flag: "\u{1F1EA}\u{1F1F8}", label: "Espagne" };
+    if (host.endsWith(".it")) return { flag: "\u{1F1EE}\u{1F1F9}", label: "Italie" };
+    if (host.endsWith(".co.uk")) return { flag: "\u{1F1EC}\u{1F1E7}", label: "UK" };
+    if (host.endsWith(".nl")) return { flag: "\u{1F1F3}\u{1F1F1}", label: "Pays-Bas" };
+    if (host.endsWith(".be")) return { flag: "\u{1F1E7}\u{1F1EA}", label: "Belgique" };
+    if (host.endsWith(".com")) return { flag: "\u{1F1FA}\u{1F1F8}", label: "US" };
+  } catch { /* invalid URL */ }
+  return null;
+}
+
 const DECISION_STYLES: Record<string, string> = {
   A_launch: "bg-green-100 text-green-700 border-green-200",
   B_review: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -382,7 +409,7 @@ export default function OpportunitiesPage() {
                   className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
                   onClick={() => handleSort("price")}
                 >
-                  Prix Amazon <SortArrow field="price" />
+                  Prix vente <SortArrow field="price" />
                 </th>
                 <th
                   className="px-3 py-3 text-right font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
@@ -498,12 +525,28 @@ export default function OpportunitiesPage() {
                           <span className="text-gray-300">&mdash;</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-gray-900">
-                        {fmtPrice(o.price)}
+                      <td className="px-3 py-2.5 text-right">
+                        {(() => {
+                          const mk = MARKETPLACE_FLAGS[o.marketplace];
+                          return (
+                            <span className="inline-flex items-center gap-1 font-semibold text-gray-900" title={mk?.label || o.marketplace}>
+                              {mk && <span className="text-sm">{mk.flag}</span>}
+                              {fmtPrice(o.price)}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         {o.cost_price > 0 ? (
-                          <span className="font-semibold text-orange-700">{fmtPrice(o.cost_price)}</span>
+                          (() => {
+                            const sc = getSourceCountry(o.source_url);
+                            return (
+                              <span className="inline-flex items-center gap-1 font-semibold text-orange-700" title={sc?.label || "Source"}>
+                                {sc && <span className="text-sm">{sc.flag}</span>}
+                                {fmtPrice(o.cost_price)}
+                              </span>
+                            );
+                          })()
                         ) : (
                           <span className="text-gray-300">&mdash;</span>
                         )}
