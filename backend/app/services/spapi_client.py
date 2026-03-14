@@ -12,18 +12,52 @@ from app.core.config import get_settings
 logger = logging.getLogger("marcus.spapi")
 
 LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token"
-SPAPI_BASE = "https://sellingpartnerapi-eu.amazon.com"
+
+SPAPI_ENDPOINTS: dict[str, str] = {
+    "eu": "https://sellingpartnerapi-eu.amazon.com",
+    "na": "https://sellingpartnerapi-na.amazon.com",
+    "fe": "https://sellingpartnerapi-fe.amazon.com",
+}
+
+MARKETPLACE_IDS: dict[str, str] = {
+    "amazon_fr": "A13V1IB3VIYZZH",
+    "amazon_de": "A1PA6795UKMFR9",
+    "amazon_es": "A1RKKUPIHCS9HS",
+    "amazon_it": "APJ6JRA9NG5V4",
+    "amazon_nl": "A1805IZSGTT6HS",
+    "amazon_be": "AMEN7PMS3EDWL",
+    "amazon_co_uk": "A1F83G8C2ARO7P",
+    "amazon_com": "ATVPDKIKX0DER",
+}
+
+PLATFORM_REGION: dict[str, str] = {
+    "amazon_fr": "eu",
+    "amazon_de": "eu",
+    "amazon_es": "eu",
+    "amazon_it": "eu",
+    "amazon_nl": "eu",
+    "amazon_be": "eu",
+    "amazon_co_uk": "eu",
+    "amazon_com": "na",
+}
 
 
 class SPAPIClient:
-    def __init__(self):
+    def __init__(self, platform: str | None = None):
         settings = get_settings()
         self.client_id = settings.SPAPI_LWA_CLIENT_ID
         self.client_secret = settings.SPAPI_LWA_CLIENT_SECRET
         self.refresh_token = settings.SPAPI_LWA_REFRESH_TOKEN
-        self.marketplace_id = settings.SPAPI_MARKETPLACE_ID_FR
         self.seller_id = settings.SPAPI_SELLER_ID
-        self.region = settings.SPAPI_REGION
+
+        if platform and platform in MARKETPLACE_IDS:
+            self.marketplace_id = MARKETPLACE_IDS[platform]
+            self.region = PLATFORM_REGION.get(platform, "eu")
+        else:
+            self.marketplace_id = settings.SPAPI_MARKETPLACE_ID_FR
+            self.region = settings.SPAPI_REGION
+
+        self.base_url = SPAPI_ENDPOINTS.get(self.region, SPAPI_ENDPOINTS["eu"])
 
         self._access_token: str | None = None
         self._token_expires: float = 0
@@ -58,7 +92,7 @@ class SPAPIClient:
             "Content-Type": "application/json",
         }
 
-        url = f"{SPAPI_BASE}{path}"
+        url = f"{self.base_url}{path}"
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.request(

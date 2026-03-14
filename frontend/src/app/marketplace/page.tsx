@@ -22,15 +22,23 @@ interface PushLog {
 }
 
 const PLATFORMS = [
-  { value: "amazon_fr", label: "Amazon France" },
-  { value: "amazon_de", label: "Amazon Allemagne" },
-  { value: "amazon_es", label: "Amazon Espagne" },
-  { value: "amazon_it", label: "Amazon Italie" },
-  { value: "cdiscount", label: "CDiscount" },
-  { value: "fnac", label: "Fnac" },
-  { value: "manomano", label: "ManoMano" },
-  { value: "rdc", label: "Rue du Commerce" },
+  { value: "amazon_fr", label: "Amazon France", flag: "\u{1F1EB}\u{1F1F7}" },
+  { value: "amazon_de", label: "Amazon Allemagne", flag: "\u{1F1E9}\u{1F1EA}" },
+  { value: "amazon_es", label: "Amazon Espagne", flag: "\u{1F1EA}\u{1F1F8}" },
+  { value: "amazon_it", label: "Amazon Italie", flag: "\u{1F1EE}\u{1F1F9}" },
+  { value: "amazon_co_uk", label: "Amazon UK", flag: "\u{1F1EC}\u{1F1E7}" },
+  { value: "amazon_nl", label: "Amazon Pays-Bas", flag: "\u{1F1F3}\u{1F1F1}" },
+  { value: "amazon_be", label: "Amazon Belgique", flag: "\u{1F1E7}\u{1F1EA}" },
+  { value: "cdiscount", label: "CDiscount", flag: "\u{1F1EB}\u{1F1F7}" },
+  { value: "fnac", label: "Fnac", flag: "\u{1F1EB}\u{1F1F7}" },
+  { value: "manomano", label: "ManoMano", flag: "\u{1F1EB}\u{1F1F7}" },
+  { value: "rdc", label: "Rue du Commerce", flag: "\u{1F1EB}\u{1F1F7}" },
 ];
+
+const COMPANY_NAMES: Record<string, string> = {
+  amazon_fr: "eComLG",
+  amazon_de: "SWITAA",
+};
 
 const LOG_STATUSES = [
   { value: "", label: "Tous les statuts" },
@@ -147,7 +155,7 @@ export default function MarketplacePage() {
               >
                 {PLATFORMS.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {p.flag} {p.label}
                   </option>
                 ))}
               </select>
@@ -178,7 +186,10 @@ export default function MarketplacePage() {
       {/* Accounts */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {accounts.map((a) => {
-          const platformLabel = PLATFORMS.find((p) => p.value === a.platform)?.label || a.platform;
+          const pf = PLATFORMS.find((p) => p.value === a.platform);
+          const platformLabel = pf?.label || a.platform;
+          const flag = pf?.flag || "";
+          const company = COMPANY_NAMES[a.platform] || "";
           return (
             <div
               key={a.id}
@@ -188,9 +199,15 @@ export default function MarketplacePage() {
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-semibold text-gray-900">{platformLabel}</h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Seller ID: {a.seller_id || "Non configure"}
+                  <div className="flex items-center gap-2">
+                    {flag && <span className="text-xl">{flag}</span>}
+                    <h3 className="font-semibold text-gray-900">{platformLabel}</h3>
+                  </div>
+                  {company && (
+                    <p className="text-sm font-medium text-blue-600 mt-1">{company}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1 font-mono">
+                    {a.seller_id || "Seller ID non configure"}
                   </p>
                 </div>
                 <button

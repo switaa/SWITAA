@@ -144,8 +144,9 @@ async def _push_amazon(
 ) -> dict[str, Any]:
     from app.services.spapi_client import SPAPIClient
 
+    spapi = SPAPIClient(platform=account.platform)
+
     creds = account.credentials or {}
-    spapi = SPAPIClient()
     if creds.get("refresh_token"):
         spapi.refresh_token = creds["refresh_token"]
     if creds.get("client_id"):
@@ -166,10 +167,15 @@ async def _push_amazon(
     if listing.brand_name:
         attributes["brand"] = [{"value": listing.brand_name}]
 
+    logger.info(
+        "Pushing SKU %s to %s (seller=%s, marketplace=%s)",
+        sku, account.platform, spapi.seller_id, spapi.marketplace_id,
+    )
+
     try:
         result = await spapi.create_listing(sku, {"attributes": attributes})
         if result:
-            return {"success": True, "data": result, "sku": sku}
+            return {"success": True, "data": result, "sku": sku, "platform": account.platform}
         return {"success": False, "error": "SP-API listing creation returned no data"}
     except Exception as e:
         return {"success": False, "error": f"SP-API error: {e}"}
