@@ -36,7 +36,7 @@ const PLATFORMS = [
 ];
 
 const COMPANY_NAMES: Record<string, string> = {
-  amazon_fr: "eComLG",
+  amazon_fr: "SWITAA",
   amazon_de: "SWITAA",
 };
 
