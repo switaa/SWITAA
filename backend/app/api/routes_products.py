@@ -416,3 +416,106 @@ async def import_single_csv_file(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         Path(tmp_path).unlink(missing_ok=True)
+
+
+class OctopiaEnrichResponse(BaseModel):
+    status: str = ""
+    total: int = 0
+    enriched: int = 0
+    errors: int = 0
+    rescored: int = 0
+    remaining: int = 0
+
+
+@router.post("/enrich-octopia", response_model=OctopiaEnrichResponse)
+async def enrich_octopia_endpoint(
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False),
+    max_products: int = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Enrich OCTOPIA products with SP-API data (catalog, pricing, BSR).
+
+    Runs in the foreground if max_products <= 50, otherwise in background.
+    """
+    from app.services.octopia_enrich_service import enrich_octopia_products
+
+    if max_products and max_products <= 50:
+        import asyncio
+        result = await enrich_octopia_products(
+            db=db, force=force, max_products=max_products,
+        )
+        return OctopiaEnrichResponse(**result)
+
+    count = db.query(Product).filter(
+        Product.source == "octopia",
+        (Product.bsr.is_(None)) | (Product.bsr == 0),
+    ).count() if not force else db.query(Product).filter(Product.source == "octopia").count()
+
+    if count == 0:
+        return OctopiaEnrichResponse(status="completed", total=0, enriched=0)
+
+    async def _bg_enrich():
+        from app.core.database import SessionLocal
+        bg_db = SessionLocal()
+        try:
+            await enrich_octopia_products(
+                db=bg_db, force=force, max_products=max_products,
+            )
+        finally:
+            bg_db.close()
+
+    background_tasks.add_task(lambda: asyncio.run(_bg_enrich()))
+
+    return OctopiaEnrichResponse(
+        status="started_background",
+        total=count,
+        remaining=count,
+    )
+
+
+class OctopiaImportResponse(BaseModel):
+    total_rows: int = 0
+    imported: int = 0
+    skipped_no_asin: int = 0
+    skipped_parse: int = 0
+    duplicates_merged: int = 0
+    ip_risk_flagged: int = 0
+    errors: int = 0
+    products_created: int = 0
+    products_updated: int = 0
+    supplier_products_created: int = 0
+    opportunities_created: int = 0
+    columns_detected: dict = {}
+    csv_headers: list[str] = []
+    error_message: str = ""
+
+
+@router.post("/import-octopia", response_model=OctopiaImportResponse)
+async def import_octopia_csv_endpoint(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Import an OCTOPIA catalog CSV with automatic column detection."""
+    import tempfile
+
+    from app.services.octopia_import_service import import_octopia_csv
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="wb") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        result = import_octopia_csv(db=db, csv_path=tmp_path, user_id=user.id)
+        return OctopiaImportResponse(**{
+            k: v for k, v in result.items()
+            if k in OctopiaImportResponse.model_fields
+        })
+    except Exception as e:
+        logger.exception(f"OCTOPIA import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)

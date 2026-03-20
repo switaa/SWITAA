@@ -29,9 +29,10 @@ interface Opportunity {
   monthly_sales: number | null;
   bsr: number | null;
   est_monthly_revenue: number | null;
+  unlock_priority: number | null;
 }
 
-type SortField = "score" | "price" | "decision" | "margin_pct" | "cost_price" | "gross_roi" | "monthly_sales" | "est_monthly_revenue" | "bsr";
+type SortField = "score" | "price" | "decision" | "margin_pct" | "cost_price" | "gross_roi" | "monthly_sales" | "est_monthly_revenue" | "bsr" | "unlock_priority";
 type SortDir = "asc" | "desc";
 
 const NICHES = [
@@ -49,6 +50,13 @@ const DECISIONS = [
   { value: "A_launch", label: "A \u2014 Lancer" },
   { value: "B_review", label: "B \u2014 A revoir" },
   { value: "C_drop", label: "C \u2014 Abandonner" },
+];
+
+const SOURCES = [
+  { value: "octopia", label: "OCTOPIA" },
+  { value: "tactical_arbitrage", label: "Tactical Arbitrage" },
+  { value: "helium10_blackbox", label: "Helium 10" },
+  { value: "amazon_search", label: "Amazon Search" },
 ];
 
 const PAGE_SIZE = 50;
@@ -152,6 +160,7 @@ export default function OpportunitiesPage() {
 
   const [niche, setNiche] = useState("");
   const [decision, setDecision] = useState("");
+  const [source, setSource] = useState("");
   const [localScore, setLocalScore] = useState(0);
   const [minScore, setMinScore] = useState(0);
 
@@ -177,13 +186,14 @@ export default function OpportunitiesPage() {
     if (minScore > 0) params.set("min_score", String(minScore));
     if (decision) params.set("decision", decision);
     if (niche) params.set("niche", niche);
+    if (source) params.set("source", source);
 
     api
       .get<Opportunity[]>(`/api/v1/scoring/opportunities?${params}`)
       .then(setAllData)
       .catch(() => setAllData([]))
       .finally(() => setLoading(false));
-  }, [minScore, decision, niche]);
+  }, [minScore, decision, niche, source]);
 
   const summary = useMemo(
     () => ({
@@ -207,6 +217,7 @@ export default function OpportunitiesPage() {
       if (sortField === "monthly_sales") return ((a.monthly_sales ?? 0) - (b.monthly_sales ?? 0)) * dir;
       if (sortField === "est_monthly_revenue") return ((a.est_monthly_revenue ?? 0) - (b.est_monthly_revenue ?? 0)) * dir;
       if (sortField === "bsr") return ((a.bsr ?? 999999) - (b.bsr ?? 999999)) * dir;
+      if (sortField === "unlock_priority") return ((a.unlock_priority ?? 0) - (b.unlock_priority ?? 0)) * dir;
       if (sortField === "decision") return a.decision.localeCompare(b.decision) * dir;
       return 0;
     });
@@ -333,7 +344,22 @@ export default function OpportunitiesPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Source</label>
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            >
+              <option value="">Toutes les sources</option>
+              {SOURCES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Niche</label>
             <select
@@ -461,6 +487,12 @@ export default function OpportunitiesPage() {
                 >
                   Decision <SortArrow field="decision" />
                 </th>
+                <th
+                  className="px-3 py-3 text-center font-medium cursor-pointer select-none hover:text-blue-600 transition-colors"
+                  onClick={() => handleSort("unlock_priority")}
+                >
+                  Priorite <SortArrow field="unlock_priority" />
+                </th>
                 <th className="px-3 py-3 text-center font-medium">Source</th>
               </tr>
             </thead>
@@ -468,7 +500,7 @@ export default function OpportunitiesPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 15 }).map((_, j) => (
+                    {Array.from({ length: 16 }).map((_, j) => (
                       <td key={j} className="px-3 py-3">
                         <div className="h-4 bg-gray-100 rounded w-full" />
                       </td>
@@ -477,7 +509,7 @@ export default function OpportunitiesPage() {
                 ))
               ) : displayed.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="px-4 py-16 text-center text-gray-400">
+                  <td colSpan={16} className="px-4 py-16 text-center text-gray-400">
                     Aucune opportunite trouvee avec ces criteres.
                   </td>
                 </tr>
@@ -643,24 +675,54 @@ export default function OpportunitiesPage() {
                         <DecisionBadge decision={o.decision} />
                       </td>
                       <td className="px-3 py-2.5 text-center">
-                        {o.source_url ? (
-                          <a
-                            href={o.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full text-xs font-medium hover:bg-orange-100 transition"
-                            onClick={(e) => e.stopPropagation()}
+                        {o.unlock_priority != null ? (
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-lg text-xs font-bold tabular-nums ${
+                              o.unlock_priority >= 70
+                                ? "bg-green-50 text-green-700"
+                                : o.unlock_priority >= 40
+                                  ? "bg-yellow-50 text-yellow-700"
+                                  : "bg-gray-100 text-gray-500"
+                            }`}
+                            title={`Priorite de deblocage : ${o.unlock_priority.toFixed(1)}/100\nBasee sur: profit mensuel, volume, marge, score`}
                           >
-                            Castorama
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        ) : (
-                          <span className="text-xs text-gray-400">
-                            {o.source === "tactical_arbitrage" ? "TA" : o.source === "helium10_blackbox" ? "H10" : "\u2014"}
+                            {o.unlock_priority.toFixed(0)}
                           </span>
+                        ) : (
+                          <span className="text-gray-300">&mdash;</span>
                         )}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {(() => {
+                          const SOURCE_BADGES: Record<string, { label: string; cls: string }> = {
+                            octopia: { label: "OCTOPIA", cls: "bg-purple-50 text-purple-700" },
+                            tactical_arbitrage: { label: "TA", cls: "bg-orange-50 text-orange-700" },
+                            helium10_blackbox: { label: "H10", cls: "bg-blue-50 text-blue-700" },
+                            amazon_search: { label: "AMZ", cls: "bg-gray-100 text-gray-600" },
+                          };
+                          const badge = SOURCE_BADGES[o.source];
+                          if (o.source_url) {
+                            return (
+                              <a
+                                href={o.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium hover:opacity-80 transition ${badge?.cls || "bg-gray-100 text-gray-600"}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {badge?.label || o.source}
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            );
+                          }
+                          return (
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badge?.cls || "bg-gray-100 text-gray-600"}`}>
+                              {badge?.label || o.source || "\u2014"}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
